@@ -51,6 +51,14 @@ export type GameState = z.infer<typeof GameStateSchema>;
 export const CHUNK_SIZE = 32;
 export const TILE_SIZE = 32;
 
+// Zoom configuration - easily configurable values
+export const ZOOM_CONFIG = {
+  // Max tile size: 0.1 * vmin (min 10 tiles per min viewport dimension)
+  MAX_TILE_SIZE_FACTOR: 0.1,
+  // Min tile size: vmax / 100 (max 100 tiles per max viewport dimension)
+  MIN_TILE_SIZE_FACTOR: 100,
+} as const;
+
 export const CRAFTING_RECIPES: Record<string, CraftingRecipe> = {
   furnace: {
     inputs: { stone: 5 },

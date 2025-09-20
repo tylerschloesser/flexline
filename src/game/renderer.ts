@@ -2,7 +2,7 @@ import * as PIXI from "pixi.js";
 import { Viewport } from "pixi-viewport";
 import { GameStateManager } from "./gameState";
 import { WorkerManager } from "../workers/WorkerManager";
-import { TILE_SIZE, CHUNK_SIZE } from "./schemas";
+import { TILE_SIZE, CHUNK_SIZE, ZOOM_CONFIG } from "./schemas";
 
 export class GameRenderer {
   private app: PIXI.Application | null = null;
@@ -20,6 +20,35 @@ export class GameRenderer {
     this.canvas = canvas;
     this.gameState = gameState;
     this.workerManager = new WorkerManager();
+  }
+
+  private calculateZoomLimits(viewportWidth: number, viewportHeight: number): { minZoom: number; maxZoom: number } {
+    const vmin = Math.min(viewportWidth, viewportHeight);
+    const vmax = Math.max(viewportWidth, viewportHeight);
+
+    // Max tile size: ZOOM_CONFIG.MAX_TILE_SIZE_FACTOR * vmin (min 10 tiles per min viewport dimension)
+    const maxTileSize = ZOOM_CONFIG.MAX_TILE_SIZE_FACTOR * vmin;
+    const maxZoom = maxTileSize / TILE_SIZE;
+
+    // Min tile size: vmax / ZOOM_CONFIG.MIN_TILE_SIZE_FACTOR (max 100 tiles per max viewport dimension)
+    const minTileSize = vmax / ZOOM_CONFIG.MIN_TILE_SIZE_FACTOR;
+    const minZoom = minTileSize / TILE_SIZE;
+
+    // Error if the viewport makes this impossible (minZoom > maxZoom)
+    if (minZoom > maxZoom) {
+      throw new Error(
+        `Viewport dimensions (${viewportWidth}x${viewportHeight}) make zoom configuration impossible. ` +
+        `Min zoom (${minZoom.toFixed(3)}) > Max zoom (${maxZoom.toFixed(3)}). ` +
+        `Consider adjusting ZOOM_CONFIG values.`
+      );
+    }
+
+    return { minZoom, maxZoom };
+  }
+
+  private validateAndClampZoom(zoom: number, viewportWidth: number, viewportHeight: number): number {
+    const { minZoom, maxZoom } = this.calculateZoomLimits(viewportWidth, viewportHeight);
+    return Math.max(minZoom, Math.min(maxZoom, zoom));
   }
 
   async initialize(): Promise<void> {
@@ -45,14 +74,34 @@ export class GameRenderer {
 
     this.app.stage.addChild(this.viewport);
 
-    this.viewport.drag().pinch().wheel().decelerate();
+    // Calculate zoom limits for initial viewport size with error handling
+    try {
+      const { minZoom, maxZoom } = this.calculateZoomLimits(window.innerWidth, window.innerHeight);
+
+      this.viewport.drag().pinch().wheel().decelerate()
+        .clampZoom({ minScale: minZoom, maxScale: maxZoom });
+    } catch (error) {
+      console.error("Error calculating initial zoom limits:", error);
+      // Fallback to basic zoom controls without limits
+      this.viewport.drag().pinch().wheel().decelerate();
+      throw error; // Re-throw to inform the user
+    }
 
     const state = this.gameState.getState();
     // Convert tile coordinates (1x1 units) back to world pixel coordinates for viewport
     const worldPixelX = state.cameraX * TILE_SIZE;
     const worldPixelY = state.cameraY * TILE_SIZE;
     this.viewport.moveCenter(worldPixelX, worldPixelY);
-    this.viewport.setZoom(state.cameraZoom);
+
+    // Validate and clamp the initial zoom
+    try {
+      const clampedZoom = this.validateAndClampZoom(state.cameraZoom, window.innerWidth, window.innerHeight);
+      this.viewport.setZoom(clampedZoom);
+    } catch (error) {
+      console.error("Error validating initial zoom:", error);
+      // Fallback to default zoom
+      this.viewport.setZoom(1);
+    }
 
     this.viewport.on("moved", () => {
       if (!this.viewport) return;
@@ -71,6 +120,21 @@ export class GameRenderer {
       if (!this.app || !this.viewport) return;
       this.app.renderer.resize(window.innerWidth, window.innerHeight);
       this.viewport.resize(window.innerWidth, window.innerHeight);
+
+      // Recalculate and apply zoom limits for new viewport size
+      try {
+        const { minZoom, maxZoom } = this.calculateZoomLimits(window.innerWidth, window.innerHeight);
+        this.viewport.clampZoom({ minScale: minZoom, maxScale: maxZoom });
+
+        // Validate current zoom and clamp if necessary
+        const currentZoom = this.viewport.scale.x;
+        const clampedZoom = this.validateAndClampZoom(currentZoom, window.innerWidth, window.innerHeight);
+        if (Math.abs(currentZoom - clampedZoom) > 0.001) {
+          this.viewport.setZoom(clampedZoom);
+        }
+      } catch (error) {
+        console.error("Error updating zoom limits on resize:", error);
+      }
     });
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
