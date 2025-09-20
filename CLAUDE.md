@@ -22,6 +22,7 @@ After making code changes, always run:
 - `bun run check` - **PREFERRED**: Runs format + lint + typecheck in one command
 
 Or individually:
+
 - `bun run format` - Format code with Prettier
 - `bun run lint` - Check code with ESLint
 - `bunx tsc -b` - Type check with TypeScript (just type checking, not full build)

@@ -1,6 +1,7 @@
 import type { GameState, Chunk, Inventory, ResourceType } from "./schemas";
 import { WorldGenerator } from "./worldGenerator";
 import { TILE_SIZE, CHUNK_SIZE } from "./schemas";
+import { DEFAULT_INVENTORY, SAVE_DEBOUNCE_TIME } from "./config";
 
 export class GameStateManager {
   private state: GameState;
@@ -17,13 +18,7 @@ export class GameStateManager {
   private createInitialState(): GameState {
     return {
       chunks: new Map(),
-      inventory: {
-        iron: 0,
-        copper: 0,
-        coal: 0,
-        wood: 0,
-        stone: 0,
-      },
+      inventory: { ...DEFAULT_INVENTORY },
       craftedItems: {},
       cameraX: 0,
       cameraY: 0,
@@ -59,7 +54,7 @@ export class GameStateManager {
     this.saveTimeout = setTimeout(() => {
       this.saveState();
       this.saveTimeout = null;
-    }, 500);
+    }, SAVE_DEBOUNCE_TIME);
   }
 
   getOrGenerateChunk(chunkX: number, chunkY: number): Chunk {
@@ -240,13 +235,7 @@ export class GameStateManager {
       // Merge saved essential state with default state structure
       const state = {
         chunks: new Map(), // Start with empty chunks (will be generated on demand)
-        inventory: parsed.inventory || {
-          iron: 0,
-          copper: 0,
-          coal: 0,
-          wood: 0,
-          stone: 0,
-        },
+        inventory: parsed.inventory || { ...DEFAULT_INVENTORY },
         craftedItems: parsed.craftedItems || {},
         cameraX: parsed.cameraX || 0,
         cameraY: parsed.cameraY || 0,

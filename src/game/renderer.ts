@@ -2,13 +2,21 @@ import * as PIXI from "pixi.js";
 import { Viewport } from "pixi-viewport";
 import { GameStateManager } from "./gameState";
 import { WorkerManager } from "../workers/WorkerManager";
+import { InputManager } from "./inputManager";
 import { TILE_SIZE, CHUNK_SIZE, ZOOM_CONFIG } from "./schemas";
+import {
+  CAMERA_MOVE_SPEED,
+  MIN_FRAME_TIME,
+  CANVAS_BACKGROUND_COLOR,
+  WORLD_DIMENSIONS,
+} from "./config";
 
 export class GameRenderer {
   private app: PIXI.Application | null = null;
   private viewport: Viewport | null = null;
   private gameState: GameStateManager;
   private workerManager: WorkerManager;
+  private inputManager: InputManager;
   private chunkContainers: Map<string, PIXI.Container> = new Map();
   private chunkTextures: Map<string, PIXI.Texture> = new Map();
   private placeholderTexture: PIXI.Texture | null = null;
@@ -20,11 +28,14 @@ export class GameRenderer {
     top: number;
     bottom: number;
   } | null = null;
+  private cameraMovement = { x: 0, y: 0 };
+  private lastFrameTime = 0;
 
   constructor(canvas: HTMLCanvasElement, gameState: GameStateManager) {
     this.canvas = canvas;
     this.gameState = gameState;
     this.workerManager = new WorkerManager();
+    this.inputManager = new InputManager();
   }
 
   private calculateZoomLimits(
@@ -73,7 +84,7 @@ export class GameRenderer {
       canvas: this.canvas,
       width: window.innerWidth,
       height: window.innerHeight,
-      backgroundColor: 0x1e1e1e,
+      backgroundColor: CANVAS_BACKGROUND_COLOR,
       resolution: window.devicePixelRatio || 1,
       autoDensity: true,
     });
@@ -82,8 +93,8 @@ export class GameRenderer {
     this.viewport = new Viewport({
       screenWidth: window.innerWidth,
       screenHeight: window.innerHeight,
-      worldWidth: 10000,
-      worldHeight: 10000,
+      worldWidth: WORLD_DIMENSIONS.WIDTH,
+      worldHeight: WORLD_DIMENSIONS.HEIGHT,
       events: this.app.renderer.events,
     });
 
@@ -176,6 +187,9 @@ export class GameRenderer {
       const worldPoint = this.viewport.toWorld(event.data.global);
       this.handleClick(worldPoint.x, worldPoint.y);
     });
+
+    // Initialize input manager and camera movement
+    this.initializeCameraControls();
 
     // Create placeholder texture and initialize textures
     this.createPlaceholderTexture();
@@ -365,7 +379,53 @@ export class GameRenderer {
     // Textures are now generated per-chunk, so this is simplified
   }
 
+  private initializeCameraControls(): void {
+    this.inputManager.initialize();
+
+    // Subscribe to movement input
+    this.inputManager.onMovement((direction) => {
+      this.cameraMovement = direction;
+    });
+
+    // Start the camera movement update loop
+    this.lastFrameTime = performance.now();
+    this.startCameraUpdateLoop();
+  }
+
+  private startCameraUpdateLoop(): void {
+    const updateCamera = (currentTime: number) => {
+      if (!this.viewport) {
+        requestAnimationFrame(updateCamera);
+        return;
+      }
+
+      const deltaTime = Math.min(
+        currentTime - this.lastFrameTime,
+        MIN_FRAME_TIME,
+      );
+      this.lastFrameTime = currentTime;
+
+      // Only move camera if there's input
+      if (this.cameraMovement.x !== 0 || this.cameraMovement.y !== 0) {
+        // Adjust speed based on zoom level (faster when zoomed out)
+        const zoomAdjustedSpeed = CAMERA_MOVE_SPEED / this.viewport.scale.x;
+        const moveDistance = (zoomAdjustedSpeed * deltaTime) / 1000;
+
+        const currentCenter = this.viewport.center;
+        const newX = currentCenter.x + this.cameraMovement.x * moveDistance;
+        const newY = currentCenter.y + this.cameraMovement.y * moveDistance;
+
+        this.viewport.moveCenter(newX, newY);
+      }
+
+      requestAnimationFrame(updateCamera);
+    };
+
+    requestAnimationFrame(updateCamera);
+  }
+
   destroy(): void {
+    this.inputManager.destroy();
     this.workerManager.destroy();
     if (this.app) {
       this.app.destroy(true);
