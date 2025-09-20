@@ -1,43 +1,55 @@
-import type { Chunk } from "../game/schemas";
+import { z } from "zod";
+import { ChunkSchema } from "../game/schemas";
 
-export interface ChunkWorkerRequest {
-  id: string;
-  chunkX: number;
-  chunkY: number;
-  seed: string;
-}
+export const ChunkWorkerRequestSchema = z.object({
+  id: z.string().min(1),
+  chunkX: z.number().int(),
+  chunkY: z.number().int(),
+  seed: z.string().min(1),
+});
 
-export interface ChunkWorkerResponse {
-  id: string;
-  chunk: Chunk;
-  error?: string;
-}
+export const ChunkWorkerResponseSchema = z.object({
+  id: z.string().min(1),
+  chunk: ChunkSchema,
+  error: z.string().optional(),
+});
 
-export interface TextureVariant {
-  baseColor: string;
-  noiseColor: string;
-  noiseOpacity: number;
-}
+export const TextureVariantSchema = z.object({
+  baseColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/, "Invalid hex color"),
+  noiseColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/, "Invalid hex color"),
+  noiseOpacity: z.number().min(0).max(1),
+});
 
-export interface TextureWorkerRequest {
-  id: string;
-  type: "tile" | "resource" | "chunk";
-  variant?: TextureVariant;
-  resourceColor?: string;
-  chunk?: Chunk;
-}
+export const TextureWorkerRequestSchema = z.object({
+  id: z.string().min(1),
+  type: z.enum(["tile", "resource", "chunk"]),
+  variant: TextureVariantSchema.optional(),
+  resourceColor: z
+    .string()
+    .regex(/^#[0-9A-Fa-f]{6}$/, "Invalid hex color")
+    .optional(),
+  chunk: ChunkSchema.optional(),
+});
 
-export interface TextureWorkerResponse {
-  id: string;
-  imageBitmap?: ImageBitmap;
-  error?: string;
-}
+export const TextureWorkerResponseSchema = z.object({
+  id: z.string().min(1),
+  imageBitmap: z.instanceof(ImageBitmap).optional(),
+  error: z.string().optional(),
+});
 
-export interface PregenerateRequest {
-  type: "pregenerate";
-}
+export const PregenerateRequestSchema = z.object({
+  type: z.literal("pregenerate"),
+});
 
-export interface PregenerateResponse {
-  type: "pregenerate-complete" | "pregenerate-error";
-  error?: string;
-}
+export const PregenerateResponseSchema = z.object({
+  type: z.enum(["pregenerate-complete", "pregenerate-error"]),
+  error: z.string().optional(),
+});
+
+export type ChunkWorkerRequest = z.infer<typeof ChunkWorkerRequestSchema>;
+export type ChunkWorkerResponse = z.infer<typeof ChunkWorkerResponseSchema>;
+export type TextureVariant = z.infer<typeof TextureVariantSchema>;
+export type TextureWorkerRequest = z.infer<typeof TextureWorkerRequestSchema>;
+export type TextureWorkerResponse = z.infer<typeof TextureWorkerResponseSchema>;
+export type PregenerateRequest = z.infer<typeof PregenerateRequestSchema>;
+export type PregenerateResponse = z.infer<typeof PregenerateResponseSchema>;

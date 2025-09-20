@@ -1,10 +1,13 @@
-import type {
-  ChunkWorkerRequest,
-  ChunkWorkerResponse,
-  TextureWorkerRequest,
-  TextureWorkerResponse,
-  PregenerateRequest,
-  TextureVariant,
+import {
+  ChunkWorkerRequestSchema,
+  ChunkWorkerResponseSchema,
+  TextureWorkerRequestSchema,
+  TextureWorkerResponseSchema,
+  PregenerateRequestSchema,
+  type ChunkWorkerRequest,
+  type TextureWorkerRequest,
+  type PregenerateRequest,
+  type TextureVariant,
 } from "./workerTypes";
 import type { Chunk } from "../game/schemas";
 import invariant from "tiny-invariant";
@@ -76,22 +79,38 @@ export class WorkerManager {
     this.pregenerateTextures();
   }
 
-  private handleChunkWorkerMessage(
-    event: MessageEvent<ChunkWorkerResponse>,
-  ): void {
-    const { id, chunk, error } = event.data;
-    const request = this.pendingChunkRequests.get(id);
+  private handleChunkWorkerMessage(event: MessageEvent): void {
+    // Validate response immediately
+    const validationResult = ChunkWorkerResponseSchema.safeParse(event.data);
+    invariant(
+      validationResult.success,
+      `Invalid chunk worker response: ${validationResult.error?.message}`,
+    );
 
-    if (request) {
-      this.pendingChunkRequests.delete(id);
-      if (error) {
-        request.reject(new Error(error));
-      } else {
-        invariant(
-          chunk,
-          `Chunk worker returned no chunk data for request ${id}`,
+    const { id, chunk, error } = validationResult.data;
+
+    try {
+      const request = this.pendingChunkRequests.get(id);
+      if (request) {
+        this.pendingChunkRequests.delete(id);
+        if (error) {
+          request.reject(new Error(error));
+        } else {
+          invariant(
+            chunk,
+            `Chunk worker returned no chunk data for request ${id}`,
+          );
+          request.resolve(chunk);
+        }
+      }
+    } catch (error) {
+      console.error("Error handling chunk worker message:", error);
+      const request = this.pendingChunkRequests.get(id);
+      if (request) {
+        this.pendingChunkRequests.delete(id);
+        request.reject(
+          new Error(error instanceof Error ? error.message : "Unknown error"),
         );
-        request.resolve(chunk);
       }
     }
   }
@@ -100,20 +119,39 @@ export class WorkerManager {
     console.error("Chunk worker error:", event.error);
   }
 
-  private handleTextureWorkerMessage(
-    event: MessageEvent<TextureWorkerResponse>,
-  ): void {
-    const { id, imageBitmap, error } = event.data;
-    const request = this.pendingTextureRequests.get(id);
+  private handleTextureWorkerMessage(event: MessageEvent): void {
+    // Validate response immediately
+    const validationResult = TextureWorkerResponseSchema.safeParse(event.data);
+    invariant(
+      validationResult.success,
+      `Invalid texture worker response: ${validationResult.error?.message}`,
+    );
 
-    if (request) {
-      this.pendingTextureRequests.delete(id);
-      invariant(!error, `Texture worker error for request ${id}: ${error}`);
-      invariant(
-        imageBitmap,
-        `Texture worker returned no bitmap for request ${id}`,
-      );
-      request.resolve(imageBitmap);
+    const { id, imageBitmap, error } = validationResult.data;
+
+    try {
+      const request = this.pendingTextureRequests.get(id);
+      if (request) {
+        this.pendingTextureRequests.delete(id);
+        if (error) {
+          request.reject(new Error(error));
+        } else {
+          invariant(
+            imageBitmap,
+            `Texture worker returned no bitmap for request ${id}`,
+          );
+          request.resolve(imageBitmap);
+        }
+      }
+    } catch (error) {
+      console.error("Error handling texture worker message:", error);
+      const request = this.pendingTextureRequests.get(id);
+      if (request) {
+        this.pendingTextureRequests.delete(id);
+        request.reject(
+          new Error(error instanceof Error ? error.message : "Unknown error"),
+        );
+      }
     }
   }
 
@@ -147,8 +185,15 @@ export class WorkerManager {
         seed,
       };
 
+      // Validate outgoing request
+      const validationResult = ChunkWorkerRequestSchema.safeParse(request);
+      invariant(
+        validationResult.success,
+        `Invalid chunk request: ${validationResult.error?.message}`,
+      );
+
       const worker = this.getAvailableChunkWorker();
-      worker.postMessage(request);
+      worker.postMessage(validationResult.data);
 
       setTimeout(() => {
         if (this.pendingChunkRequests.has(id)) {
@@ -170,8 +215,15 @@ export class WorkerManager {
         variant,
       };
 
+      // Validate outgoing request
+      const validationResult = TextureWorkerRequestSchema.safeParse(request);
+      invariant(
+        validationResult.success,
+        `Invalid texture request: ${validationResult.error?.message}`,
+      );
+
       const worker = this.getAvailableTextureWorker();
-      worker.postMessage(request);
+      worker.postMessage(validationResult.data);
 
       setTimeout(() => {
         if (this.pendingTextureRequests.has(id)) {
@@ -193,8 +245,15 @@ export class WorkerManager {
         resourceColor,
       };
 
+      // Validate outgoing request
+      const validationResult = TextureWorkerRequestSchema.safeParse(request);
+      invariant(
+        validationResult.success,
+        `Invalid texture request: ${validationResult.error?.message}`,
+      );
+
       const worker = this.getAvailableTextureWorker();
-      worker.postMessage(request);
+      worker.postMessage(validationResult.data);
 
       setTimeout(() => {
         if (this.pendingTextureRequests.has(id)) {
@@ -216,8 +275,15 @@ export class WorkerManager {
         chunk,
       };
 
+      // Validate outgoing request
+      const validationResult = TextureWorkerRequestSchema.safeParse(request);
+      invariant(
+        validationResult.success,
+        `Invalid texture request: ${validationResult.error?.message}`,
+      );
+
       const worker = this.getAvailableTextureWorker();
-      worker.postMessage(request);
+      worker.postMessage(validationResult.data);
 
       setTimeout(() => {
         if (this.pendingTextureRequests.has(id)) {
@@ -243,7 +309,15 @@ export class WorkerManager {
 
         worker.addEventListener("message", handler);
         const request: PregenerateRequest = { type: "pregenerate" };
-        worker.postMessage(request);
+
+        // Validate outgoing pregenerate request
+        const validationResult = PregenerateRequestSchema.safeParse(request);
+        invariant(
+          validationResult.success,
+          `Invalid pregenerate request: ${validationResult.error?.message}`,
+        );
+
+        worker.postMessage(validationResult.data);
       });
     });
 

@@ -3,19 +3,11 @@ import Prando from "prando";
 import { ChunkSchema, CHUNK_SIZE } from "../game/schemas";
 import type { Chunk, Tile, ResourceType } from "../game/schemas";
 import invariant from "tiny-invariant";
-
-interface ChunkRequest {
-  id: string;
-  chunkX: number;
-  chunkY: number;
-  seed: string;
-}
-
-interface ChunkResponse {
-  id: string;
-  chunk: Chunk;
-  error?: string;
-}
+import {
+  ChunkWorkerRequestSchema,
+  ChunkWorkerResponseSchema,
+  type ChunkWorkerResponse,
+} from "./workerTypes";
 
 class WorkerWorldGenerator {
   private terrainNoise;
@@ -106,28 +98,55 @@ class WorkerWorldGenerator {
 let generator: WorkerWorldGenerator | null = null;
 const chunkCache = new Map<string, Chunk>();
 
-self.addEventListener("message", (event: MessageEvent<ChunkRequest>) => {
-  const { id, chunkX, chunkY, seed } = event.data;
+self.addEventListener("message", (event: MessageEvent) => {
+  // Validate incoming request immediately
+  const validationResult = ChunkWorkerRequestSchema.safeParse(event.data);
+  invariant(
+    validationResult.success,
+    `Invalid request: ${validationResult.error?.message}`,
+  );
 
-  if (!generator || generator.constructor.name === "WorkerWorldGenerator") {
-    generator = new WorkerWorldGenerator(seed);
-  }
+  const { id, chunkX, chunkY, seed } = validationResult.data;
+  let response: ChunkWorkerResponse;
 
-  const cacheKey = `${chunkX},${chunkY}`;
-  let chunk = chunkCache.get(cacheKey);
+  try {
+    if (!generator || generator.constructor.name === "WorkerWorldGenerator") {
+      generator = new WorkerWorldGenerator(seed);
+    }
 
-  if (!chunk) {
-    chunk = generator.generateChunk(chunkX, chunkY);
+    const cacheKey = `${chunkX},${chunkY}`;
+    let chunk = chunkCache.get(cacheKey);
 
-    const validationResult = ChunkSchema.safeParse(chunk);
+    if (!chunk) {
+      chunk = generator.generateChunk(chunkX, chunkY);
+
+      // Validate generated chunk
+      const chunkValidationResult = ChunkSchema.safeParse(chunk);
+      invariant(
+        chunkValidationResult.success,
+        `Invalid chunk data: ${chunkValidationResult.error?.message}`,
+      );
+
+      chunkCache.set(cacheKey, chunk);
+    }
+
+    response = { id, chunk };
+
+    // Validate outgoing response
+    const responseValidationResult =
+      ChunkWorkerResponseSchema.safeParse(response);
     invariant(
-      validationResult.success,
-      `Invalid chunk data: ${validationResult.error?.message}`,
+      responseValidationResult.success,
+      `Invalid response format: ${responseValidationResult.error?.message}`,
     );
 
-    chunkCache.set(cacheKey, chunk);
+    self.postMessage(response);
+  } catch (error) {
+    response = {
+      id,
+      chunk: { x: 0, y: 0, tiles: [] },
+      error: error instanceof Error ? error.message : "Unknown error",
+    };
+    self.postMessage(response);
   }
-
-  const response: ChunkResponse = { id, chunk };
-  self.postMessage(response);
 });
