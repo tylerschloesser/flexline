@@ -36,6 +36,7 @@ export class GameRenderer {
   private cameraMovement = { x: 0, y: 0 };
   private lastFrameTime = 0;
   private mousePosition = { x: 0, y: 0 };
+  private lastMouseScreenPosition = { x: 0, y: 0 };
   private placementPreview: PIXI.Container | null = null;
   private entityContainer!: PIXI.Container;
 
@@ -205,6 +206,10 @@ export class GameRenderer {
     // Track mouse movement for placement preview
     this.viewport.on("pointermove", (event) => {
       if (!this.viewport) return;
+      // Store screen position for WASD camera movement updates
+      this.lastMouseScreenPosition.x = event.global.x;
+      this.lastMouseScreenPosition.y = event.global.y;
+      // Calculate and store world position
       const worldPoint = this.viewport.toWorld(event.global);
       this.mousePosition.x = worldPoint.x;
       this.mousePosition.y = worldPoint.y;
@@ -478,12 +483,32 @@ export class GameRenderer {
         const newY = currentCenter.y + this.cameraMovement.y * moveDistance;
 
         this.viewport.moveCenter(newX, newY);
+
+        // Manually trigger updates since moveCenter doesn't emit "moved" event
+        const center = this.viewport.center;
+        this.gameState.updateCamera(center.x, center.y, this.viewport.scale.x);
+        this.updateVisibleChunks();
+
+        // Update world mouse position and placement preview after camera movement
+        this.updateMouseWorldPosition();
+        this.updatePlacementPreview();
       }
 
       requestAnimationFrame(updateCamera);
     };
 
     requestAnimationFrame(updateCamera);
+  }
+
+  private updateMouseWorldPosition(): void {
+    if (!this.viewport) return;
+    // Recalculate world position from stored screen position
+    const worldPoint = this.viewport.toWorld({
+      x: this.lastMouseScreenPosition.x,
+      y: this.lastMouseScreenPosition.y,
+    });
+    this.mousePosition.x = worldPoint.x;
+    this.mousePosition.y = worldPoint.y;
   }
 
   private updatePlacementPreview(): void {
@@ -503,7 +528,8 @@ export class GameRenderer {
     const definition = ENTITY_DEFINITIONS[selectedItem];
     const { width, height } = definition;
 
-    // Convert mouse position (world pixels) to tile coordinates, treating mouse as entity center
+    // Use current mouse position in world coordinates
+    // This is updated by pointermove events and stays current
     const mouseTileX = this.mousePosition.x / TILE_SIZE;
     const mouseTileY = this.mousePosition.y / TILE_SIZE;
 
