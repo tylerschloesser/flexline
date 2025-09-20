@@ -1,10 +1,21 @@
-import { useState } from 'react'
-import { Container, Title, Button, Text, Group, Stack, Badge, Paper, Center, Image } from '@mantine/core'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
+import { useState } from "react";
+import {
+  Container,
+  Title,
+  Button,
+  Text,
+  Group,
+  Stack,
+  Badge,
+  Paper,
+  Center,
+  Image,
+} from "@mantine/core";
+import reactLogo from "./assets/react.svg";
+import viteLogo from "/vite.svg";
 
 function App() {
-  const [count, setCount] = useState(0)
+  const [count, setCount] = useState(0);
 
   return (
     <Container size="sm" py="xl">
@@ -30,7 +41,8 @@ function App() {
               count is {count}
             </Button>
             <Text size="sm" c="dimmed">
-              Edit <Badge variant="light">src/App.tsx</Badge> and save to test HMR
+              Edit <Badge variant="light">src/App.tsx</Badge> and save to test
+              HMR
             </Text>
           </Stack>
         </Paper>
@@ -42,7 +54,7 @@ function App() {
         </Center>
       </Stack>
     </Container>
-  )
+  );
 }
 
-export default App
+export default App;
