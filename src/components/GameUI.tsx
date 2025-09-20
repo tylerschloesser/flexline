@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, memo, useMemo } from "react";
 import { GameStateManager } from "../game/gameState";
 import "./GameUI.css";
 
@@ -6,7 +6,7 @@ interface GameUIProps {
   gameState: GameStateManager;
 }
 
-export function GameUI({ gameState }: GameUIProps) {
+export const GameUI = memo(function GameUI({ gameState }: GameUIProps) {
   const [inventory, setInventory] = useState(gameState.getInventory());
   const [craftedItems, setCraftedItems] = useState(gameState.getCraftedItems());
 
@@ -34,7 +34,10 @@ export function GameUI({ gameState }: GameUIProps) {
     }
   };
 
-  const canCraftFurnace = inventory.stone >= 5;
+  const canCraftFurnace = useMemo(
+    () => inventory.stone >= 5,
+    [inventory.stone],
+  );
 
   return (
     <div className="game-ui">
@@ -81,4 +84,4 @@ export function GameUI({ gameState }: GameUIProps) {
       </div>
     </div>
   );
-}
+});

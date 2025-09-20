@@ -5,6 +5,7 @@ export class GameStateManager {
   private state: GameState;
   private worldGenerator: WorldGenerator;
   private listeners: Set<() => void> = new Set();
+  private saveTimeout: NodeJS.Timeout | null = null;
 
   constructor() {
     this.worldGenerator = new WorldGenerator();
@@ -41,7 +42,17 @@ export class GameStateManager {
 
   private notify(): void {
     this.listeners.forEach((listener) => listener());
-    this.saveState();
+    this.debouncedSave();
+  }
+
+  private debouncedSave(): void {
+    if (this.saveTimeout) {
+      clearTimeout(this.saveTimeout);
+    }
+    this.saveTimeout = setTimeout(() => {
+      this.saveState();
+      this.saveTimeout = null;
+    }, 500);
   }
 
   getOrGenerateChunk(chunkX: number, chunkY: number): Chunk {
