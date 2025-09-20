@@ -47,8 +47,14 @@ class WorkerWorldGenerator {
           tileY * 0.025,
         );
         const resourceValue = this.resourceNoise(tileX * 0.05, tileY * 0.05);
-        const resourceSpawnValue = this.resourceSpawnNoise(tileX * 0.1, tileY * 0.1);
-        const resourceAmountValue = this.resourceAmountNoise(tileX * 0.08, tileY * 0.08);
+        const resourceSpawnValue = this.resourceSpawnNoise(
+          tileX * 0.1,
+          tileY * 0.1,
+        );
+        const resourceAmountValue = this.resourceAmountNoise(
+          tileX * 0.08,
+          tileY * 0.08,
+        );
 
         const type = terrainValue > -0.1 ? "land" : "water";
         const elevation =
@@ -99,11 +105,11 @@ class WorkerWorldGenerator {
 let generator: WorkerWorldGenerator | null = null;
 const chunkCache = new Map<string, Chunk>();
 
-self.addEventListener('message', (event: MessageEvent<ChunkRequest>) => {
+self.addEventListener("message", (event: MessageEvent<ChunkRequest>) => {
   const { id, chunkX, chunkY, seed } = event.data;
 
   try {
-    if (!generator || generator.constructor.name === 'WorkerWorldGenerator') {
+    if (!generator || generator.constructor.name === "WorkerWorldGenerator") {
       generator = new WorkerWorldGenerator(seed);
     }
 
@@ -115,7 +121,9 @@ self.addEventListener('message', (event: MessageEvent<ChunkRequest>) => {
 
       const validationResult = ChunkSchema.safeParse(chunk);
       if (!validationResult.success) {
-        throw new Error(`Invalid chunk data: ${validationResult.error.message}`);
+        throw new Error(
+          `Invalid chunk data: ${validationResult.error.message}`,
+        );
       }
 
       chunkCache.set(cacheKey, chunk);
@@ -127,7 +135,7 @@ self.addEventListener('message', (event: MessageEvent<ChunkRequest>) => {
     const response: ChunkResponse = {
       id,
       chunk: { x: chunkX, y: chunkY, tiles: [] },
-      error: error instanceof Error ? error.message : 'Unknown error'
+      error: error instanceof Error ? error.message : "Unknown error",
     };
     self.postMessage(response);
   }

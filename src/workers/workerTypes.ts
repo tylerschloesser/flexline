@@ -21,7 +21,7 @@ export interface TextureVariant {
 
 export interface TextureWorkerRequest {
   id: string;
-  type: 'tile' | 'resource' | 'chunk';
+  type: "tile" | "resource" | "chunk";
   variant?: TextureVariant;
   resourceColor?: string;
   chunk?: Chunk;
@@ -34,10 +34,10 @@ export interface TextureWorkerResponse {
 }
 
 export interface PregenerateRequest {
-  type: 'pregenerate';
+  type: "pregenerate";
 }
 
 export interface PregenerateResponse {
-  type: 'pregenerate-complete' | 'pregenerate-error';
+  type: "pregenerate-complete" | "pregenerate-error";
   error?: string;
 }

@@ -14,7 +14,12 @@ export class GameRenderer {
   private placeholderTexture: PIXI.Texture | null = null;
   private canvas: HTMLCanvasElement;
   private pendingChunks = new Set<string>();
-  private lastVisibleBounds: { left: number; right: number; top: number; bottom: number } | null = null;
+  private lastVisibleBounds: {
+    left: number;
+    right: number;
+    top: number;
+    bottom: number;
+  } | null = null;
 
   constructor(canvas: HTMLCanvasElement, gameState: GameStateManager) {
     this.canvas = canvas;
@@ -101,15 +106,26 @@ export class GameRenderer {
     const bounds = this.viewport.getVisibleBounds();
 
     // Skip if bounds haven't changed significantly
-    if (this.lastVisibleBounds &&
-        Math.abs(bounds.left - this.lastVisibleBounds.left) < CHUNK_SIZE * TILE_SIZE / 2 &&
-        Math.abs(bounds.right - this.lastVisibleBounds.right) < CHUNK_SIZE * TILE_SIZE / 2 &&
-        Math.abs(bounds.top - this.lastVisibleBounds.top) < CHUNK_SIZE * TILE_SIZE / 2 &&
-        Math.abs(bounds.bottom - this.lastVisibleBounds.bottom) < CHUNK_SIZE * TILE_SIZE / 2) {
+    if (
+      this.lastVisibleBounds &&
+      Math.abs(bounds.left - this.lastVisibleBounds.left) <
+        (CHUNK_SIZE * TILE_SIZE) / 2 &&
+      Math.abs(bounds.right - this.lastVisibleBounds.right) <
+        (CHUNK_SIZE * TILE_SIZE) / 2 &&
+      Math.abs(bounds.top - this.lastVisibleBounds.top) <
+        (CHUNK_SIZE * TILE_SIZE) / 2 &&
+      Math.abs(bounds.bottom - this.lastVisibleBounds.bottom) <
+        (CHUNK_SIZE * TILE_SIZE) / 2
+    ) {
       return;
     }
 
-    this.lastVisibleBounds = { left: bounds.left, right: bounds.right, top: bounds.top, bottom: bounds.bottom };
+    this.lastVisibleBounds = {
+      left: bounds.left,
+      right: bounds.right,
+      top: bounds.top,
+      bottom: bounds.bottom,
+    };
 
     const startChunkX = Math.floor(bounds.left / (CHUNK_SIZE * TILE_SIZE));
     const endChunkX = Math.ceil(bounds.right / (CHUNK_SIZE * TILE_SIZE));
@@ -162,7 +178,10 @@ export class GameRenderer {
     this.chunkContainers.set(key, sprite);
   }
 
-  private async renderChunkAsync(chunkX: number, chunkY: number): Promise<void> {
+  private async renderChunkAsync(
+    chunkX: number,
+    chunkY: number,
+  ): Promise<void> {
     if (!this.viewport) return;
 
     const key = `${chunkX},${chunkY}`;
@@ -189,8 +208,12 @@ export class GameRenderer {
           this.renderPlaceholderChunk(chunkX, chunkY);
         }
 
-        const chunk = await this.gameState.getOrGenerateChunkAsync(chunkX, chunkY);
-        const imageBitmap = await this.workerManager.generateChunkTexture(chunk);
+        const chunk = await this.gameState.getOrGenerateChunkAsync(
+          chunkX,
+          chunkY,
+        );
+        const imageBitmap =
+          await this.workerManager.generateChunkTexture(chunk);
         chunkTexture = PIXI.Texture.from(imageBitmap);
         this.chunkTextures.set(key, chunkTexture);
       }

@@ -1,5 +1,6 @@
 import * as PIXI from "pixi.js";
 import { TILE_SIZE } from "./schemas";
+import invariant from "tiny-invariant";
 
 type TextureVariant = {
   baseColor: string;
@@ -59,7 +60,8 @@ export class TextureGenerator {
     const canvas = document.createElement("canvas");
     canvas.width = TILE_SIZE;
     canvas.height = TILE_SIZE;
-    const ctx = canvas.getContext("2d")!;
+    const ctx = canvas.getContext("2d");
+    invariant(ctx, "Failed to get 2D context for tile texture");
 
     ctx.fillStyle = variant.baseColor;
     ctx.fillRect(0, 0, TILE_SIZE, TILE_SIZE);
@@ -94,7 +96,8 @@ export class TextureGenerator {
     const canvas = document.createElement("canvas");
     canvas.width = TILE_SIZE / 2;
     canvas.height = TILE_SIZE / 2;
-    const ctx = canvas.getContext("2d")!;
+    const ctx = canvas.getContext("2d");
+    invariant(ctx, "Failed to get 2D context for resource texture");
 
     ctx.fillStyle = color;
     ctx.beginPath();
@@ -136,7 +139,8 @@ export class TextureGenerator {
       const canvas = document.createElement("canvas");
       canvas.width = TILE_SIZE;
       canvas.height = TILE_SIZE;
-      const ctx = canvas.getContext("2d")!;
+      const ctx = canvas.getContext("2d");
+      invariant(ctx, "Failed to get 2D context for async tile texture");
 
       ctx.fillStyle = variant.baseColor;
       ctx.fillRect(0, 0, TILE_SIZE, TILE_SIZE);
@@ -166,13 +170,18 @@ export class TextureGenerator {
     });
   }
 
-  getRandomTexture(type: string): PIXI.Texture | undefined {
+  getRandomTexture(type: string): PIXI.Texture {
     const textures = this.textureCache.get(type);
-    if (!textures || textures.length === 0) return undefined;
+    invariant(
+      textures && textures.length > 0,
+      `No textures available for type: ${type}`,
+    );
     return textures[Math.floor(Math.random() * textures.length)];
   }
 
-  getResourceTexture(resource: string): PIXI.Texture | undefined {
-    return this.resourceTextures.get(resource);
+  getResourceTexture(resource: string): PIXI.Texture {
+    const texture = this.resourceTextures.get(resource);
+    invariant(texture, `No texture available for resource: ${resource}`);
+    return texture;
   }
 }
