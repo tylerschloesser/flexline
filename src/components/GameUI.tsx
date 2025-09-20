@@ -1,7 +1,16 @@
 import { useState, useEffect, memo, useMemo } from "react";
+import {
+  Paper,
+  Text,
+  Button,
+  Stack,
+  Group,
+  Badge,
+  Divider,
+  Box,
+} from "@mantine/core";
 import { GameStateManager } from "../game/gameState";
 import type { EntityType } from "../game/schemas";
-import "./GameUI.css";
 
 interface GameUIProps {
   gameState: GameStateManager;
@@ -53,65 +62,139 @@ export const GameUI = memo(function GameUI({ gameState }: GameUIProps) {
   );
 
   return (
-    <div className="game-ui">
-      <div className="ui-panel inventory-panel">
-        <h2>Inventory</h2>
-        <div className="inventory-list">
+    <Box
+      style={{
+        position: "fixed",
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        pointerEvents: "none",
+        display: "flex",
+        flexDirection: "column",
+        gap: 10,
+        padding: 10,
+      }}
+    >
+      {/* Inventory Panel */}
+      <Paper
+        style={{
+          position: "absolute",
+          top: 10,
+          left: 10,
+          minWidth: 200,
+          pointerEvents: "auto",
+        }}
+        p="md"
+        withBorder
+        shadow="md"
+      >
+        <Text size="lg" fw={600} mb="sm">
+          Inventory
+        </Text>
+        <Stack gap="xs">
           {Object.entries(inventory).map(([resource, amount]) => (
-            <div key={resource} className="inventory-item">
-              <span className="resource-name">{resource}</span>
-              <span className="resource-amount">{amount}</span>
-            </div>
+            <Group key={resource} justify="space-between">
+              <Text tt="capitalize">{resource}</Text>
+              <Badge color="green" variant="light">
+                {amount}
+              </Badge>
+            </Group>
           ))}
-        </div>
-      </div>
+        </Stack>
+      </Paper>
 
-      <div className="ui-panel crafting-panel">
-        <h2>Crafting</h2>
-        <div className="crafting-list">
-          <div className="crafting-item">
-            <button
+      {/* Crafting Panel */}
+      <Paper
+        style={{
+          position: "absolute",
+          top: 10,
+          right: 10,
+          minWidth: 200,
+          pointerEvents: "auto",
+        }}
+        p="md"
+        withBorder
+        shadow="md"
+      >
+        <Text size="lg" fw={600} mb="sm">
+          Crafting
+        </Text>
+        <Stack gap="xs">
+          <Group>
+            <Button
               onClick={() => handleCraft("furnace")}
               disabled={!canCraftFurnace}
-              className="craft-button"
+              flex={1}
             >
               Furnace (5 stone)
-            </button>
-            <span className="crafted-count">
-              {craftedItems.furnace ? `x${craftedItems.furnace}` : ""}
-            </span>
-          </div>
-        </div>
+            </Button>
+            {craftedItems.furnace && (
+              <Badge color="green" variant="light">
+                x{craftedItems.furnace}
+              </Badge>
+            )}
+          </Group>
+        </Stack>
 
         {craftedItems.furnace && craftedItems.furnace > 0 && (
-          <div className="placement-section">
-            <h3>Place Items</h3>
-            <div className="placement-list">
-              <button
+          <>
+            <Divider my="md" />
+            <Text size="md" fw={500} mb="sm">
+              Place Items
+            </Text>
+            <Stack gap="xs">
+              <Button
                 onClick={() => handleSelectItem("furnace")}
-                className={`placement-button ${selectedCraftingItem === "furnace" ? "selected" : ""}`}
+                variant={
+                  selectedCraftingItem === "furnace" ? "filled" : "light"
+                }
+                color={selectedCraftingItem === "furnace" ? "orange" : "green"}
+                leftSection={selectedCraftingItem === "furnace" ? "✓" : ""}
               >
-                {selectedCraftingItem === "furnace" ? "✓ " : ""}Furnace{" "}
-                {selectedCraftingItem === "furnace" ? "(Selected)" : ""}
-              </button>
-            </div>
-          </div>
+                Furnace {selectedCraftingItem === "furnace" ? "(Selected)" : ""}
+              </Button>
+            </Stack>
+          </>
         )}
-      </div>
+      </Paper>
 
-      <div className="ui-panel controls-panel">
-        <h2>Controls</h2>
-        <div className="controls-info">
-          <p>🖱️ Drag to pan</p>
-          <p>🎯 Click resources to mine</p>
-          <p>🔍 Scroll to zoom</p>
-          <p>🏗️ Select items to place them</p>
-          <p>📦 Click to place selected items</p>
-        </div>
-        <button onClick={handleReset} className="reset-button">
+      {/* Controls Panel */}
+      <Paper
+        style={{
+          position: "absolute",
+          bottom: 10,
+          left: 10,
+          pointerEvents: "auto",
+        }}
+        p="md"
+        withBorder
+        shadow="md"
+      >
+        <Text size="lg" fw={600} mb="sm">
+          Controls
+        </Text>
+        <Stack gap="xs" mb="md">
+          <Text size="sm" c="dimmed">
+            🖱️ Drag to pan
+          </Text>
+          <Text size="sm" c="dimmed">
+            🎯 Click resources to mine
+          </Text>
+          <Text size="sm" c="dimmed">
+            🔍 Scroll to zoom
+          </Text>
+          <Text size="sm" c="dimmed">
+            🏗️ Select items to place them
+          </Text>
+          <Text size="sm" c="dimmed">
+            📦 Click to place selected items
+          </Text>
+        </Stack>
+        <Button onClick={handleReset} color="red" fullWidth>
           Reset Game
-        </button>
-      </div>
-    </div>
+        </Button>
+      </Paper>
+    </Box>
   );
 });
