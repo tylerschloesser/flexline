@@ -1,4 +1,5 @@
-import { TILE_SIZE } from "../game/schemas";
+import { TILE_SIZE, CHUNK_SIZE } from "../game/schemas";
+import type { Chunk } from "../game/schemas";
 
 interface TextureVariant {
   baseColor: string;
@@ -8,9 +9,10 @@ interface TextureVariant {
 
 interface TextureRequest {
   id: string;
-  type: 'tile' | 'resource';
+  type: 'tile' | 'resource' | 'chunk';
   variant?: TextureVariant;
   resourceColor?: string;
+  chunk?: Chunk;
 }
 
 interface TextureResponse {
@@ -103,6 +105,96 @@ async function createTileTexture(variant: TextureVariant): Promise<ImageBitmap> 
   }
 }
 
+async function createChunkTexture(chunk: Chunk): Promise<ImageBitmap> {
+  const cacheKey = `chunk_${chunk.x}_${chunk.y}`;
+
+  if (textureCache.has(cacheKey)) {
+    return textureCache.get(cacheKey)!;
+  }
+
+  try {
+    const canvas = new OffscreenCanvas(CHUNK_SIZE * TILE_SIZE, CHUNK_SIZE * TILE_SIZE);
+    const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
+
+    const TEXTURE_VARIANTS = {
+      landHigh: ["#8B7355", "#9B8365", "#8B6F47"],
+      landLow: ["#5A8C3A", "#6A9C4A", "#4F7C2F"],
+      waterDeep: ["#1E5A8C", "#2E6A9C", "#0E4A7C"],
+      waterShallow: ["#3E8AAC", "#4E9ABC", "#5EAACC"],
+    };
+
+    const RESOURCE_COLORS = {
+      iron: "#8C8C8C",
+      copper: "#B87333",
+      coal: "#2C2C2C",
+      wood: "#654321",
+      stone: "#696969",
+    };
+
+    for (let y = 0; y < CHUNK_SIZE; y++) {
+      for (let x = 0; x < CHUNK_SIZE; x++) {
+        const tile = chunk.tiles[y][x];
+        const tileType =
+          tile.type === "land"
+            ? tile.elevation > 0
+              ? "landHigh"
+              : "landLow"
+            : tile.elevation > 0
+              ? "waterShallow"
+              : "waterDeep";
+
+        // Pick random color variant for this tile
+        const colors = TEXTURE_VARIANTS[tileType];
+        const baseColor = colors[Math.floor(Math.random() * colors.length)];
+        ctx.fillStyle = baseColor;
+        ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+
+        // Add noise to this tile
+        const imageData = ctx.getImageData(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+        const data = imageData.data;
+        for (let i = 0; i < data.length; i += 4) {
+          if (Math.random() > 0.7) {
+            const noise = Math.random() * 30 - 15;
+            data[i] = Math.max(0, Math.min(255, data[i] + noise));     // R
+            data[i + 1] = Math.max(0, Math.min(255, data[i + 1] + noise)); // G
+            data[i + 2] = Math.max(0, Math.min(255, data[i + 2] + noise)); // B
+          }
+        }
+        ctx.putImageData(imageData, x * TILE_SIZE, y * TILE_SIZE);
+
+        // Draw resources as circles with proper colors
+        if (tile.resource && tile.resourceAmount) {
+          const resourceColor = RESOURCE_COLORS[tile.resource] || "#FFD700";
+          ctx.fillStyle = resourceColor;
+          ctx.beginPath();
+          const centerX = x * TILE_SIZE + TILE_SIZE / 2;
+          const centerY = y * TILE_SIZE + TILE_SIZE / 2;
+          ctx.arc(centerX, centerY, TILE_SIZE / 6, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.strokeStyle = "#000000";
+          ctx.lineWidth = 1;
+          ctx.stroke();
+        }
+      }
+    }
+
+    const imageBitmap = await createImageBitmap(canvas);
+    textureCache.set(cacheKey, imageBitmap);
+    return imageBitmap;
+  } catch {
+    // Create a simple fallback texture
+    const canvas = new OffscreenCanvas(CHUNK_SIZE * TILE_SIZE, CHUNK_SIZE * TILE_SIZE);
+    const ctx = canvas.getContext('2d')!;
+    ctx.fillStyle = '#404040';
+    ctx.fillRect(0, 0, CHUNK_SIZE * TILE_SIZE, CHUNK_SIZE * TILE_SIZE);
+
+    const imageBitmap = await createImageBitmap(canvas);
+    textureCache.set(cacheKey, imageBitmap);
+    return imageBitmap;
+  }
+}
+
 async function createResourceTexture(color: string): Promise<ImageBitmap> {
   const cacheKey = `resource_${color}`;
 
@@ -140,7 +232,7 @@ async function createResourceTexture(color: string): Promise<ImageBitmap> {
 }
 
 self.addEventListener('message', async (event: MessageEvent<TextureRequest>) => {
-  const { id, type, variant, resourceColor } = event.data;
+  const { id, type, variant, resourceColor, chunk } = event.data;
 
   try {
     let imageBitmap: ImageBitmap;
@@ -149,6 +241,8 @@ self.addEventListener('message', async (event: MessageEvent<TextureRequest>) => 
       imageBitmap = await createTileTexture(variant);
     } else if (type === 'resource' && resourceColor) {
       imageBitmap = await createResourceTexture(resourceColor);
+    } else if (type === 'chunk' && chunk) {
+      imageBitmap = await createChunkTexture(chunk);
     } else {
       throw new Error('Invalid texture request parameters');
     }

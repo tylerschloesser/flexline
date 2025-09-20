@@ -21,9 +21,10 @@ export interface TextureVariant {
 
 export interface TextureWorkerRequest {
   id: string;
-  type: 'tile' | 'resource';
+  type: 'tile' | 'resource' | 'chunk';
   variant?: TextureVariant;
   resourceColor?: string;
+  chunk?: Chunk;
 }
 
 export interface TextureWorkerResponse {

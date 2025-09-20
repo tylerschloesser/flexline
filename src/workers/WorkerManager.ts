@@ -165,6 +165,29 @@ export class WorkerManager {
     });
   }
 
+  async generateChunkTexture(chunk: Chunk): Promise<ImageBitmap> {
+    return new Promise((resolve, reject) => {
+      const id = `texture_${++this.textureRequestId}`;
+      this.pendingTextureRequests.set(id, { resolve, reject });
+
+      const request: TextureWorkerRequest = {
+        id,
+        type: 'chunk',
+        chunk
+      };
+
+      const worker = this.getAvailableTextureWorker();
+      worker.postMessage(request);
+
+      setTimeout(() => {
+        if (this.pendingTextureRequests.has(id)) {
+          this.pendingTextureRequests.delete(id);
+          reject(new Error('Chunk texture generation timeout'));
+        }
+      }, 5000); // Longer timeout for chunk textures
+    });
+  }
+
   private async pregenerateTextures(): Promise<void> {
     const promises = this.textureWorkers.map(worker => {
       return new Promise<void>((resolve, reject) => {

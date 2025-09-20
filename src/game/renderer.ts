@@ -1,13 +1,14 @@
 import * as PIXI from "pixi.js";
 import { Viewport } from "pixi-viewport";
 import { GameStateManager } from "./gameState";
+import { WorkerManager } from "../workers/WorkerManager";
 import { TILE_SIZE, CHUNK_SIZE } from "./schemas";
-import type { Chunk } from "./schemas";
 
 export class GameRenderer {
   private app: PIXI.Application | null = null;
   private viewport: Viewport | null = null;
   private gameState: GameStateManager;
+  private workerManager: WorkerManager;
   private chunkContainers: Map<string, PIXI.Container> = new Map();
   private chunkTextures: Map<string, PIXI.Texture> = new Map();
   private placeholderTexture: PIXI.Texture | null = null;
@@ -18,6 +19,7 @@ export class GameRenderer {
   constructor(canvas: HTMLCanvasElement, gameState: GameStateManager) {
     this.canvas = canvas;
     this.gameState = gameState;
+    this.workerManager = new WorkerManager();
   }
 
   async initialize(): Promise<void> {
@@ -188,7 +190,8 @@ export class GameRenderer {
         }
 
         const chunk = await this.gameState.getOrGenerateChunkAsync(chunkX, chunkY);
-        chunkTexture = this.generateChunkTexture(chunk);
+        const imageBitmap = await this.workerManager.generateChunkTexture(chunk);
+        chunkTexture = PIXI.Texture.from(imageBitmap);
         this.chunkTextures.set(key, chunkTexture);
       }
 
@@ -243,83 +246,12 @@ export class GameRenderer {
     this.placeholderTexture = PIXI.Texture.from(canvas);
   }
 
-  private generateChunkTexture(chunk: Chunk): PIXI.Texture {
-    const canvas = document.createElement("canvas");
-    canvas.width = CHUNK_SIZE * TILE_SIZE;
-    canvas.height = CHUNK_SIZE * TILE_SIZE;
-    const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
-
-    const TEXTURE_VARIANTS = {
-      landHigh: ["#8B7355", "#9B8365", "#8B6F47"],
-      landLow: ["#5A8C3A", "#6A9C4A", "#4F7C2F"],
-      waterDeep: ["#1E5A8C", "#2E6A9C", "#0E4A7C"],
-      waterShallow: ["#3E8AAC", "#4E9ABC", "#5EAACC"],
-    };
-
-    const RESOURCE_COLORS = {
-      iron: "#8C8C8C",
-      copper: "#B87333",
-      coal: "#2C2C2C",
-      wood: "#654321",
-      stone: "#696969",
-    };
-
-    for (let y = 0; y < CHUNK_SIZE; y++) {
-      for (let x = 0; x < CHUNK_SIZE; x++) {
-        const tile = chunk.tiles[y][x];
-        const tileType =
-          tile.type === "land"
-            ? tile.elevation > 0
-              ? "landHigh"
-              : "landLow"
-            : tile.elevation > 0
-              ? "waterShallow"
-              : "waterDeep";
-
-        // Pick random color variant for this tile
-        const colors = TEXTURE_VARIANTS[tileType];
-        const baseColor = colors[Math.floor(Math.random() * colors.length)];
-        ctx.fillStyle = baseColor;
-        ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
-
-        // Add noise to this tile
-        const imageData = ctx.getImageData(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
-        const data = imageData.data;
-        for (let i = 0; i < data.length; i += 4) {
-          if (Math.random() > 0.7) {
-            const noise = Math.random() * 30 - 15;
-            data[i] = Math.max(0, Math.min(255, data[i] + noise));     // R
-            data[i + 1] = Math.max(0, Math.min(255, data[i + 1] + noise)); // G
-            data[i + 2] = Math.max(0, Math.min(255, data[i + 2] + noise)); // B
-          }
-        }
-        ctx.putImageData(imageData, x * TILE_SIZE, y * TILE_SIZE);
-
-        // Draw resources as circles with proper colors
-        if (tile.resource && tile.resourceAmount) {
-          const resourceColor = RESOURCE_COLORS[tile.resource] || "#FFD700";
-          ctx.fillStyle = resourceColor;
-          ctx.beginPath();
-          const centerX = x * TILE_SIZE + TILE_SIZE / 2;
-          const centerY = y * TILE_SIZE + TILE_SIZE / 2;
-          ctx.arc(centerX, centerY, TILE_SIZE / 6, 0, Math.PI * 2);
-          ctx.fill();
-
-          ctx.strokeStyle = "#000000";
-          ctx.lineWidth = 1;
-          ctx.stroke();
-        }
-      }
-    }
-
-    return PIXI.Texture.from(canvas);
-  }
-
   private async initializeTextures(): Promise<void> {
     // Textures are now generated per-chunk, so this is simplified
   }
 
   destroy(): void {
+    this.workerManager.destroy();
     if (this.app) {
       this.app.destroy(true);
     }
