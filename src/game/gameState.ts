@@ -74,7 +74,10 @@ export class GameStateManager {
     return this.state.chunks.get(key)!;
   }
 
-  async getOrGenerateChunkAsync(chunkX: number, chunkY: number): Promise<Chunk> {
+  async getOrGenerateChunkAsync(
+    chunkX: number,
+    chunkY: number,
+  ): Promise<Chunk> {
     const key = this.worldGenerator.getChunkKey(chunkX, chunkY);
 
     if (this.state.chunks.has(key)) {
@@ -107,7 +110,12 @@ export class GameStateManager {
     const localTileX = Math.floor(tileX) - chunkX * CHUNK_SIZE;
     const localTileY = Math.floor(tileY) - chunkY * CHUNK_SIZE;
 
-    if (localTileX < 0 || localTileX >= CHUNK_SIZE || localTileY < 0 || localTileY >= CHUNK_SIZE) {
+    if (
+      localTileX < 0 ||
+      localTileX >= CHUNK_SIZE ||
+      localTileY < 0 ||
+      localTileY >= CHUNK_SIZE
+    ) {
       return false;
     }
 

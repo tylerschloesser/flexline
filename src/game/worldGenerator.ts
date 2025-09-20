@@ -34,8 +34,14 @@ export class WorldGenerator {
           tileY * 0.025,
         );
         const resourceValue = this.resourceNoise(tileX * 0.05, tileY * 0.05);
-        const resourceSpawnValue = this.resourceSpawnNoise(tileX * 0.1, tileY * 0.1);
-        const resourceAmountValue = this.resourceAmountNoise(tileX * 0.08, tileY * 0.08);
+        const resourceSpawnValue = this.resourceSpawnNoise(
+          tileX * 0.1,
+          tileY * 0.1,
+        );
+        const resourceAmountValue = this.resourceAmountNoise(
+          tileX * 0.08,
+          tileY * 0.08,
+        );
 
         const type = terrainValue > -0.1 ? "land" : "water";
         const elevation =

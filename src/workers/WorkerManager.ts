@@ -4,54 +4,80 @@ import type {
   TextureWorkerRequest,
   TextureWorkerResponse,
   PregenerateRequest,
-  TextureVariant
-} from './workerTypes';
-import type { Chunk } from '../game/schemas';
+  TextureVariant,
+} from "./workerTypes";
+import type { Chunk } from "../game/schemas";
 
 export class WorkerManager {
   private chunkWorkers: Worker[] = [];
   private textureWorkers: Worker[] = [];
   private chunkRequestId = 0;
   private textureRequestId = 0;
-  private pendingChunkRequests = new Map<string, {
-    resolve: (chunk: Chunk) => void;
-    reject: (error: Error) => void;
-  }>();
-  private pendingTextureRequests = new Map<string, {
-    resolve: (imageBitmap: ImageBitmap) => void;
-    reject: (error: Error) => void;
-  }>();
+  private pendingChunkRequests = new Map<
+    string,
+    {
+      resolve: (chunk: Chunk) => void;
+      reject: (error: Error) => void;
+    }
+  >();
+  private pendingTextureRequests = new Map<
+    string,
+    {
+      resolve: (imageBitmap: ImageBitmap) => void;
+      reject: (error: Error) => void;
+    }
+  >();
 
   constructor() {
     this.initializeWorkers();
   }
 
   private initializeWorkers(): void {
-    const numChunkWorkers = Math.max(1, Math.floor(navigator.hardwareConcurrency / 2));
-    const numTextureWorkers = Math.max(1, Math.floor(navigator.hardwareConcurrency / 4));
+    const numChunkWorkers = Math.max(
+      1,
+      Math.floor(navigator.hardwareConcurrency / 2),
+    );
+    const numTextureWorkers = Math.max(
+      1,
+      Math.floor(navigator.hardwareConcurrency / 4),
+    );
 
     for (let i = 0; i < numChunkWorkers; i++) {
-      const worker = new Worker(new URL('./chunkWorker.ts', import.meta.url), {
-        type: 'module'
+      const worker = new Worker(new URL("./chunkWorker.ts", import.meta.url), {
+        type: "module",
       });
-      worker.addEventListener('message', this.handleChunkWorkerMessage.bind(this));
-      worker.addEventListener('error', this.handleChunkWorkerError.bind(this));
+      worker.addEventListener(
+        "message",
+        this.handleChunkWorkerMessage.bind(this),
+      );
+      worker.addEventListener("error", this.handleChunkWorkerError.bind(this));
       this.chunkWorkers.push(worker);
     }
 
     for (let i = 0; i < numTextureWorkers; i++) {
-      const worker = new Worker(new URL('./textureWorker.ts', import.meta.url), {
-        type: 'module'
-      });
-      worker.addEventListener('message', this.handleTextureWorkerMessage.bind(this));
-      worker.addEventListener('error', this.handleTextureWorkerError.bind(this));
+      const worker = new Worker(
+        new URL("./textureWorker.ts", import.meta.url),
+        {
+          type: "module",
+        },
+      );
+      worker.addEventListener(
+        "message",
+        this.handleTextureWorkerMessage.bind(this),
+      );
+      worker.addEventListener(
+        "error",
+        this.handleTextureWorkerError.bind(this),
+      );
       this.textureWorkers.push(worker);
     }
 
     this.pregenerateTextures();
   }
 
-  private handleChunkWorkerMessage(event: MessageEvent<ChunkWorkerResponse>): void {
+  private handleChunkWorkerMessage(
+    event: MessageEvent<ChunkWorkerResponse>,
+  ): void {
     const { id, chunk, error } = event.data;
     const request = this.pendingChunkRequests.get(id);
 
@@ -66,17 +92,19 @@ export class WorkerManager {
   }
 
   private handleChunkWorkerError(event: ErrorEvent): void {
-    console.error('Chunk worker error:', event.error);
+    console.error("Chunk worker error:", event.error);
   }
 
-  private handleTextureWorkerMessage(event: MessageEvent<TextureWorkerResponse>): void {
+  private handleTextureWorkerMessage(
+    event: MessageEvent<TextureWorkerResponse>,
+  ): void {
     const { id, imageBitmap, error } = event.data;
     const request = this.pendingTextureRequests.get(id);
 
     if (request) {
       this.pendingTextureRequests.delete(id);
       if (error || !imageBitmap) {
-        request.reject(new Error(error || 'Failed to create texture'));
+        request.reject(new Error(error || "Failed to create texture"));
       } else {
         request.resolve(imageBitmap);
       }
@@ -84,7 +112,7 @@ export class WorkerManager {
   }
 
   private handleTextureWorkerError(event: ErrorEvent): void {
-    console.error('Texture worker error:', event.error);
+    console.error("Texture worker error:", event.error);
   }
 
   private getAvailableChunkWorker(): Worker {
@@ -92,10 +120,16 @@ export class WorkerManager {
   }
 
   private getAvailableTextureWorker(): Worker {
-    return this.textureWorkers[this.textureRequestId % this.textureWorkers.length];
+    return this.textureWorkers[
+      this.textureRequestId % this.textureWorkers.length
+    ];
   }
 
-  async generateChunk(chunkX: number, chunkY: number, seed: string): Promise<Chunk> {
+  async generateChunk(
+    chunkX: number,
+    chunkY: number,
+    seed: string,
+  ): Promise<Chunk> {
     return new Promise((resolve, reject) => {
       const id = `chunk_${++this.chunkRequestId}`;
       this.pendingChunkRequests.set(id, { resolve, reject });
@@ -104,7 +138,7 @@ export class WorkerManager {
         id,
         chunkX,
         chunkY,
-        seed
+        seed,
       };
 
       const worker = this.getAvailableChunkWorker();
@@ -113,7 +147,7 @@ export class WorkerManager {
       setTimeout(() => {
         if (this.pendingChunkRequests.has(id)) {
           this.pendingChunkRequests.delete(id);
-          reject(new Error('Chunk generation timeout'));
+          reject(new Error("Chunk generation timeout"));
         }
       }, 5000);
     });
@@ -126,8 +160,8 @@ export class WorkerManager {
 
       const request: TextureWorkerRequest = {
         id,
-        type: 'tile',
-        variant
+        type: "tile",
+        variant,
       };
 
       const worker = this.getAvailableTextureWorker();
@@ -136,7 +170,7 @@ export class WorkerManager {
       setTimeout(() => {
         if (this.pendingTextureRequests.has(id)) {
           this.pendingTextureRequests.delete(id);
-          reject(new Error('Texture generation timeout'));
+          reject(new Error("Texture generation timeout"));
         }
       }, 3000);
     });
@@ -149,8 +183,8 @@ export class WorkerManager {
 
       const request: TextureWorkerRequest = {
         id,
-        type: 'resource',
-        resourceColor
+        type: "resource",
+        resourceColor,
       };
 
       const worker = this.getAvailableTextureWorker();
@@ -159,7 +193,7 @@ export class WorkerManager {
       setTimeout(() => {
         if (this.pendingTextureRequests.has(id)) {
           this.pendingTextureRequests.delete(id);
-          reject(new Error('Resource texture generation timeout'));
+          reject(new Error("Resource texture generation timeout"));
         }
       }, 3000);
     });
@@ -172,8 +206,8 @@ export class WorkerManager {
 
       const request: TextureWorkerRequest = {
         id,
-        type: 'chunk',
-        chunk
+        type: "chunk",
+        chunk,
       };
 
       const worker = this.getAvailableTextureWorker();
@@ -182,42 +216,42 @@ export class WorkerManager {
       setTimeout(() => {
         if (this.pendingTextureRequests.has(id)) {
           this.pendingTextureRequests.delete(id);
-          reject(new Error('Chunk texture generation timeout'));
+          reject(new Error("Chunk texture generation timeout"));
         }
       }, 5000); // Longer timeout for chunk textures
     });
   }
 
   private async pregenerateTextures(): Promise<void> {
-    const promises = this.textureWorkers.map(worker => {
+    const promises = this.textureWorkers.map((worker) => {
       return new Promise<void>((resolve, reject) => {
         const handler = (event: MessageEvent) => {
-          if (event.data.type === 'pregenerate-complete') {
-            worker.removeEventListener('message', handler);
+          if (event.data.type === "pregenerate-complete") {
+            worker.removeEventListener("message", handler);
             resolve();
-          } else if (event.data.type === 'pregenerate-error') {
-            worker.removeEventListener('message', handler);
+          } else if (event.data.type === "pregenerate-error") {
+            worker.removeEventListener("message", handler);
             reject(new Error(event.data.error));
           }
         };
 
-        worker.addEventListener('message', handler);
-        const request: PregenerateRequest = { type: 'pregenerate' };
+        worker.addEventListener("message", handler);
+        const request: PregenerateRequest = { type: "pregenerate" };
         worker.postMessage(request);
       });
     });
 
     try {
       await Promise.all(promises);
-      console.log('Texture pregeneration completed');
+      console.log("Texture pregeneration completed");
     } catch (error) {
-      console.error('Texture pregeneration failed:', error);
+      console.error("Texture pregeneration failed:", error);
     }
   }
 
   destroy(): void {
-    this.chunkWorkers.forEach(worker => worker.terminate());
-    this.textureWorkers.forEach(worker => worker.terminate());
+    this.chunkWorkers.forEach((worker) => worker.terminate());
+    this.textureWorkers.forEach((worker) => worker.terminate());
     this.chunkWorkers = [];
     this.textureWorkers = [];
     this.pendingChunkRequests.clear();
