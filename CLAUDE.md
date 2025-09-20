@@ -12,15 +12,19 @@ Always use `bun` instead of `npm`
 - `bun run build` - Type check with TypeScript and build for production
 - `bun run lint` - Run ESLint checks
 - `bun run format` - Format code with Prettier
+- `bun run check` - **PREFERRED**: Format, lint, and type check in one command
 - `bun run preview` - Preview production build locally
 
 ### Code Quality
 
 After making code changes, always run:
 
+- `bun run check` - **PREFERRED**: Runs format + lint + typecheck in one command
+
+Or individually:
 - `bun run format` - Format code with Prettier
 - `bun run lint` - Check code with ESLint
-- `tsc -b` - Type check with TypeScript (just type checking, not full build)
+- `bunx tsc -b` - Type check with TypeScript (just type checking, not full build)
 
 ## Architecture
 

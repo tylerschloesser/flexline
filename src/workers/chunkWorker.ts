@@ -2,6 +2,7 @@ import { createNoise2D } from "simplex-noise";
 import Prando from "prando";
 import { ChunkSchema, CHUNK_SIZE } from "../game/schemas";
 import type { Chunk, Tile, ResourceType } from "../game/schemas";
+import invariant from "tiny-invariant";
 
 interface ChunkRequest {
   id: string;
@@ -108,35 +109,25 @@ const chunkCache = new Map<string, Chunk>();
 self.addEventListener("message", (event: MessageEvent<ChunkRequest>) => {
   const { id, chunkX, chunkY, seed } = event.data;
 
-  try {
-    if (!generator || generator.constructor.name === "WorkerWorldGenerator") {
-      generator = new WorkerWorldGenerator(seed);
-    }
-
-    const cacheKey = `${chunkX},${chunkY}`;
-    let chunk = chunkCache.get(cacheKey);
-
-    if (!chunk) {
-      chunk = generator.generateChunk(chunkX, chunkY);
-
-      const validationResult = ChunkSchema.safeParse(chunk);
-      if (!validationResult.success) {
-        throw new Error(
-          `Invalid chunk data: ${validationResult.error.message}`,
-        );
-      }
-
-      chunkCache.set(cacheKey, chunk);
-    }
-
-    const response: ChunkResponse = { id, chunk };
-    self.postMessage(response);
-  } catch (error) {
-    const response: ChunkResponse = {
-      id,
-      chunk: { x: chunkX, y: chunkY, tiles: [] },
-      error: error instanceof Error ? error.message : "Unknown error",
-    };
-    self.postMessage(response);
+  if (!generator || generator.constructor.name === "WorkerWorldGenerator") {
+    generator = new WorkerWorldGenerator(seed);
   }
+
+  const cacheKey = `${chunkX},${chunkY}`;
+  let chunk = chunkCache.get(cacheKey);
+
+  if (!chunk) {
+    chunk = generator.generateChunk(chunkX, chunkY);
+
+    const validationResult = ChunkSchema.safeParse(chunk);
+    invariant(
+      validationResult.success,
+      `Invalid chunk data: ${validationResult.error?.message}`,
+    );
+
+    chunkCache.set(cacheKey, chunk);
+  }
+
+  const response: ChunkResponse = { id, chunk };
+  self.postMessage(response);
 });
