@@ -39,11 +39,33 @@ const RESOURCE_COLORS: Record<string, string> = {
   stone: "#696969",
 };
 
+type EntityTextureVariant = {
+  baseColor: string;
+  outlineColor: string;
+  noiseColor: string;
+  noiseOpacity: number;
+  width: number;
+  height: number;
+};
+
+const ENTITY_TEXTURE_VARIANTS: Record<string, EntityTextureVariant> = {
+  furnace: {
+    baseColor: "#808080", // Gray
+    outlineColor: "#404040", // Dark gray
+    noiseColor: "#606060", // Medium gray for noise
+    noiseOpacity: 0.4,
+    width: 2,
+    height: 2,
+  },
+};
+
 export class TextureGenerator {
   private textureCache: Map<string, PIXI.Texture[]> = new Map();
   private resourceTextures: Map<string, PIXI.Texture> = new Map();
+  private entityTextures: Map<string, PIXI.Texture> = new Map();
 
   generateTextures(): void {
+    // Generate tile textures
     Object.entries(TEXTURE_VARIANTS).forEach(([type, variants]) => {
       const textures = variants.map((variant) =>
         this.createTileTexture(variant),
@@ -51,8 +73,14 @@ export class TextureGenerator {
       this.textureCache.set(type, textures);
     });
 
+    // Generate resource textures
     Object.entries(RESOURCE_COLORS).forEach(([resource, color]) => {
       this.resourceTextures.set(resource, this.createResourceTexture(color));
+    });
+
+    // Generate entity textures
+    Object.entries(ENTITY_TEXTURE_VARIANTS).forEach(([entity, variant]) => {
+      this.entityTextures.set(entity, this.createEntityTexture(variant));
     });
   }
 
@@ -63,33 +91,20 @@ export class TextureGenerator {
     const ctx = canvas.getContext("2d");
     invariant(ctx, "Failed to get 2D context for tile texture");
 
+    // Fill with base color
     ctx.fillStyle = variant.baseColor;
     ctx.fillRect(0, 0, TILE_SIZE, TILE_SIZE);
 
-    const svgFilter = `
-      <svg xmlns="http://www.w3.org/2000/svg" width="${TILE_SIZE}" height="${TILE_SIZE}">
-        <defs>
-          <filter id="noise">
-            <feTurbulence baseFrequency="0.9" numOctaves="4" seed="${Math.random() * 1000}" />
-            <feColorMatrix values="0 0 0 0 0,
-                                   0 0 0 0 0,
-                                   0 0 0 0 0,
-                                   0 0 0 1 0" />
-          </filter>
-        </defs>
-        <rect width="${TILE_SIZE}" height="${TILE_SIZE}" fill="${variant.noiseColor}" filter="url(#noise)" opacity="${variant.noiseOpacity}" />
-      </svg>
-    `;
+    // Add simple noise overlay
+    this.addCanvasNoise(
+      ctx,
+      TILE_SIZE,
+      TILE_SIZE,
+      variant.noiseColor,
+      variant.noiseOpacity,
+    );
 
-    const img = new Image();
-    img.src = "data:image/svg+xml;base64," + btoa(svgFilter);
-
-    return new Promise<PIXI.Texture>((resolve) => {
-      img.onload = () => {
-        ctx.drawImage(img, 0, 0);
-        resolve(PIXI.Texture.from(canvas));
-      };
-    }) as unknown as PIXI.Texture;
+    return PIXI.Texture.from(canvas);
   }
 
   private createResourceTexture(color: string): PIXI.Texture {
@@ -111,63 +126,74 @@ export class TextureGenerator {
     return PIXI.Texture.from(canvas);
   }
 
-  async initializeTextures(): Promise<void> {
-    const promises: Promise<void>[] = [];
+  private createEntityTexture(variant: EntityTextureVariant): PIXI.Texture {
+    const canvas = document.createElement("canvas");
+    canvas.width = TILE_SIZE * variant.width;
+    canvas.height = TILE_SIZE * variant.height;
+    const ctx = canvas.getContext("2d");
+    invariant(ctx, "Failed to get 2D context for entity texture");
 
-    for (const [type, variants] of Object.entries(TEXTURE_VARIANTS)) {
-      const texturePromises = variants.map(async (variant) => {
-        const texture = await this.createTileTextureAsync(variant);
-        if (!this.textureCache.has(type)) {
-          this.textureCache.set(type, []);
-        }
-        this.textureCache.get(type)!.push(texture);
-      });
-      promises.push(...texturePromises.map((p) => p.then(() => {})));
-    }
+    // Fill with base color
+    ctx.fillStyle = variant.baseColor;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    Object.entries(RESOURCE_COLORS).forEach(([resource, color]) => {
-      this.resourceTextures.set(resource, this.createResourceTexture(color));
-    });
+    // Add dark gray outline
+    ctx.strokeStyle = variant.outlineColor;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(1, 1, canvas.width - 2, canvas.height - 2);
 
-    await Promise.all(promises);
+    // Add simple noise overlay
+    this.addCanvasNoise(
+      ctx,
+      canvas.width,
+      canvas.height,
+      variant.noiseColor,
+      variant.noiseOpacity,
+    );
+
+    return PIXI.Texture.from(canvas);
   }
 
-  private createTileTextureAsync(
-    variant: TextureVariant,
-  ): Promise<PIXI.Texture> {
-    return new Promise((resolve) => {
-      const canvas = document.createElement("canvas");
-      canvas.width = TILE_SIZE;
-      canvas.height = TILE_SIZE;
-      const ctx = canvas.getContext("2d");
-      invariant(ctx, "Failed to get 2D context for async tile texture");
+  private addCanvasNoise(
+    ctx: CanvasRenderingContext2D,
+    width: number,
+    height: number,
+    noiseColor: string,
+    opacity: number,
+  ): void {
+    const imageData = ctx.getImageData(0, 0, width, height);
+    const data = imageData.data;
 
-      ctx.fillStyle = variant.baseColor;
-      ctx.fillRect(0, 0, TILE_SIZE, TILE_SIZE);
+    // Parse noise color
+    const noiseRgb = this.hexToRgb(noiseColor);
 
-      const svgFilter = `
-        <svg xmlns="http://www.w3.org/2000/svg" width="${TILE_SIZE}" height="${TILE_SIZE}">
-          <defs>
-            <filter id="noise">
-              <feTurbulence baseFrequency="0.9" numOctaves="4" seed="${Math.random() * 1000}" />
-              <feColorMatrix values="0 0 0 0 0,
-                                     0 0 0 0 0,
-                                     0 0 0 0 0,
-                                     0 0 0 1 0" />
-            </filter>
-          </defs>
-          <rect width="${TILE_SIZE}" height="${TILE_SIZE}" fill="${variant.noiseColor}" filter="url(#noise)" opacity="${variant.noiseOpacity}" />
-        </svg>
-      `;
+    // Add random noise
+    for (let i = 0; i < data.length; i += 4) {
+      if (Math.random() < opacity) {
+        const noise = Math.random() * 0.5 + 0.5; // 0.5 to 1.0
+        data[i] = Math.floor(
+          data[i] * (1 - opacity) + noiseRgb.r * opacity * noise,
+        ); // R
+        data[i + 1] = Math.floor(
+          data[i + 1] * (1 - opacity) + noiseRgb.g * opacity * noise,
+        ); // G
+        data[i + 2] = Math.floor(
+          data[i + 2] * (1 - opacity) + noiseRgb.b * opacity * noise,
+        ); // B
+      }
+    }
 
-      const img = new Image();
-      img.src = "data:image/svg+xml;base64," + btoa(svgFilter);
+    ctx.putImageData(imageData, 0, 0);
+  }
 
-      img.onload = () => {
-        ctx.drawImage(img, 0, 0);
-        resolve(PIXI.Texture.from(canvas));
-      };
-    });
+  private hexToRgb(hex: string): { r: number; g: number; b: number } {
+    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    invariant(result, `Invalid hex color: ${hex}`);
+    return {
+      r: parseInt(result[1], 16),
+      g: parseInt(result[2], 16),
+      b: parseInt(result[3], 16),
+    };
   }
 
   getRandomTexture(type: string): PIXI.Texture {
@@ -182,6 +208,12 @@ export class TextureGenerator {
   getResourceTexture(resource: string): PIXI.Texture {
     const texture = this.resourceTextures.get(resource);
     invariant(texture, `No texture available for resource: ${resource}`);
+    return texture;
+  }
+
+  getEntityTexture(entity: string): PIXI.Texture {
+    const texture = this.entityTextures.get(entity);
+    invariant(texture, `No texture available for entity: ${entity}`);
     return texture;
   }
 }

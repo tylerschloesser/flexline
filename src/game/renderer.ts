@@ -3,6 +3,7 @@ import { Viewport } from "pixi-viewport";
 import { GameStateManager } from "./gameState";
 import { WorkerManager } from "../workers/WorkerManager";
 import { InputManager } from "./inputManager";
+import { TextureGenerator } from "./textureGenerator";
 import {
   TILE_SIZE,
   CHUNK_SIZE,
@@ -22,6 +23,7 @@ export class GameRenderer {
   private gameState: GameStateManager;
   private workerManager: WorkerManager;
   private inputManager: InputManager;
+  private textureGenerator: TextureGenerator;
   private chunkContainers: Map<string, PIXI.Container> = new Map();
   private chunkTextures: Map<string, PIXI.Texture> = new Map();
   private placeholderTexture: PIXI.Texture | null = null;
@@ -45,6 +47,7 @@ export class GameRenderer {
     this.gameState = gameState;
     this.workerManager = new WorkerManager();
     this.inputManager = new InputManager();
+    this.textureGenerator = new TextureGenerator();
   }
 
   private calculateZoomLimits(
@@ -233,6 +236,7 @@ export class GameRenderer {
     // Create placeholder texture and initialize textures
     this.createPlaceholderTexture();
     await this.initializeTextures();
+    this.textureGenerator.generateTextures();
     this.updateVisibleChunks();
     this.renderEntities();
   }
@@ -612,50 +616,14 @@ export class GameRenderer {
   ): PIXI.Container {
     const container = new PIXI.Container();
 
-    // For now, create a simple rectangle to represent the entity
-    // In the future, this could load actual textures
-    const graphics = new PIXI.Graphics();
+    const texture = this.textureGenerator.getEntityTexture(entityType);
+    const sprite = new PIXI.Sprite(texture);
 
-    if (entityType === "furnace") {
-      // Draw a 2x2 furnace
-      graphics.rect(0, 0, 2 * TILE_SIZE, 2 * TILE_SIZE).fill(0x8b4513); // Brown color for furnace
+    // Position sprite relative to center
+    sprite.anchor.set(0.5, 0.5);
+    container.addChild(sprite);
 
-      // Add some detail - chimney
-      graphics
-        .rect(
-          TILE_SIZE * 0.7,
-          TILE_SIZE * 0.2,
-          TILE_SIZE * 0.6,
-          TILE_SIZE * 0.4,
-        )
-        .fill(0x654321);
-
-      // Add fire opening
-      graphics
-        .rect(
-          TILE_SIZE * 0.3,
-          TILE_SIZE * 1.2,
-          TILE_SIZE * 0.4,
-          TILE_SIZE * 0.3,
-        )
-        .fill(0x000000);
-      graphics
-        .rect(
-          TILE_SIZE * 0.35,
-          TILE_SIZE * 1.25,
-          TILE_SIZE * 0.3,
-          TILE_SIZE * 0.2,
-        )
-        .fill(0xff4500);
-    }
-
-    // Position the graphics relative to center
-    graphics.x = -(2 * TILE_SIZE) / 2;
-    graphics.y = -(2 * TILE_SIZE) / 2;
-
-    container.addChild(graphics);
     container.position.set(centerX * TILE_SIZE, centerY * TILE_SIZE);
-
     return container;
   }
 
