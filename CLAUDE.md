@@ -20,6 +20,7 @@ After making code changes, always run:
 
 - `bun run format` - Format code with Prettier
 - `bun run lint` - Check code with ESLint
+- `tsc -b` - Type check with TypeScript (just type checking, not full build)
 
 ## Architecture
 
@@ -40,3 +41,4 @@ Do what has been asked; nothing more, nothing less.
 NEVER create files unless they're absolutely necessary for achieving your goal.
 ALWAYS prefer editing an existing file to creating a new one.
 NEVER proactively create documentation files (\*.md) or README files. Only create documentation files if explicitly requested by the User.
+Claude should never run the dev server. I Run the dev server in a separate shell always.

@@ -4,9 +4,28 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Vite + React + TS</title>
+    <title>Fluxline - Factory Game</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+      }
+      #game-canvas {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+      }
+      #root {
+        position: relative;
+        z-index: 1;
+      }
+    </style>
   </head>
   <body>
+    <canvas id="game-canvas"></canvas>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

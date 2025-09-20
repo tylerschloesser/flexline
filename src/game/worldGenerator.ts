@@ -1,0 +1,84 @@
+import { createNoise2D } from "simplex-noise";
+import type { Chunk, Tile, ResourceType } from "./schemas";
+import { CHUNK_SIZE } from "./schemas";
+
+export class WorldGenerator {
+  private terrainNoise = createNoise2D();
+  private resourceNoise = createNoise2D();
+  private elevationNoise = createNoise2D();
+
+  generateChunk(chunkX: number, chunkY: number): Chunk {
+    const tiles: Tile[][] = [];
+
+    for (let y = 0; y < CHUNK_SIZE; y++) {
+      const row: Tile[] = [];
+      for (let x = 0; x < CHUNK_SIZE; x++) {
+        const worldX = chunkX * CHUNK_SIZE + x;
+        const worldY = chunkY * CHUNK_SIZE + y;
+
+        const terrainValue = this.terrainNoise(worldX * 0.015, worldY * 0.015);
+        const elevationValue = this.elevationNoise(
+          worldX * 0.025,
+          worldY * 0.025,
+        );
+        const resourceValue = this.resourceNoise(worldX * 0.05, worldY * 0.05);
+
+        const type = terrainValue > -0.1 ? "land" : "water";
+        const elevation =
+          type === "land"
+            ? elevationValue > 0
+              ? 1
+              : 0
+            : elevationValue > 0.2
+              ? 0
+              : 1;
+
+        let resource: ResourceType | null = null;
+        let resourceAmount: number | null = null;
+
+        if (type === "land" && Math.random() < 0.15) {
+          if (resourceValue > 0.6) {
+            resource = "iron";
+          } else if (resourceValue > 0.3) {
+            resource = "copper";
+          } else if (resourceValue > 0) {
+            resource = "coal";
+          } else if (resourceValue > -0.3) {
+            resource = "stone";
+          } else {
+            resource = "wood";
+          }
+          resourceAmount = Math.floor(Math.random() * 50) + 50;
+        }
+
+        row.push({
+          type,
+          elevation,
+          resource,
+          resourceAmount,
+        });
+      }
+      tiles.push(row);
+    }
+
+    return {
+      x: chunkX,
+      y: chunkY,
+      tiles,
+    };
+  }
+
+  getChunkKey(x: number, y: number): string {
+    return `${x},${y}`;
+  }
+
+  getChunkCoordinates(
+    worldX: number,
+    worldY: number,
+  ): { chunkX: number; chunkY: number } {
+    return {
+      chunkX: Math.floor(worldX / CHUNK_SIZE),
+      chunkY: Math.floor(worldY / CHUNK_SIZE),
+    };
+  }
+}

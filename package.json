@@ -13,8 +13,12 @@
   "dependencies": {
     "@mantine/core": "^8.3.1",
     "@mantine/hooks": "^8.3.1",
+    "pixi-viewport": "^6.0.3",
+    "pixi.js": "^8.13.2",
     "react": "^19.1.1",
-    "react-dom": "^19.1.1"
+    "react-dom": "^19.1.1",
+    "simplex-noise": "^4.0.3",
+    "zod": "^4.1.9"
   },
   "devDependencies": {
     "@eslint/js": "^9.35.0",
