@@ -129,7 +129,7 @@ export const GameUI = memo(function GameUI({ gameState }: GameUIProps) {
             >
               Furnace (5 stone)
             </Button>
-            {craftedItems.furnace && (
+            {craftedItems.furnace > 0 && (
               <Badge color="green" variant="light">
                 x{craftedItems.furnace}
               </Badge>
