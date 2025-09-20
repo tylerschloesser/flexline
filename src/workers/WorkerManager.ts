@@ -120,14 +120,31 @@ export class WorkerManager {
   }
 
   private handleTextureWorkerMessage(event: MessageEvent): void {
-    // Validate response immediately
+    // Validate response immediately using discriminated union
     const validationResult = TextureWorkerResponseSchema.safeParse(event.data);
     invariant(
       validationResult.success,
       `Invalid texture worker response: ${validationResult.error?.message}`,
     );
 
-    const { id, imageBitmap, error } = validationResult.data;
+    const response = validationResult.data;
+
+    // Handle based on discriminated union type
+    if (
+      response.type === "pregenerate-complete" ||
+      response.type === "pregenerate-error"
+    ) {
+      // Pregenerate responses don't need further handling in WorkerManager
+      return;
+    }
+
+    // TypeScript now knows this is a TextureResponse
+    invariant(
+      response.type === "texture",
+      `Unexpected response type: ${response.type}`,
+    );
+
+    const { id, imageBitmap, error } = response;
 
     try {
       const request = this.pendingTextureRequests.get(id);

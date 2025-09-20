@@ -6,7 +6,7 @@ import {
   TextureWorkerResponseSchema,
   PregenerateRequestSchema,
   PregenerateResponseSchema,
-  type TextureWorkerResponse,
+  type TextureResponse,
   type TextureVariant,
   type PregenerateResponse,
 } from "./workerTypes";
@@ -206,7 +206,7 @@ self.addEventListener("message", async (event: MessageEvent) => {
   );
 
   const { id, type, variant, resourceColor, chunk } = validationResult.data;
-  let response: TextureWorkerResponse;
+  let response: TextureResponse;
 
   try {
     let imageBitmap: ImageBitmap;
@@ -224,7 +224,7 @@ self.addEventListener("message", async (event: MessageEvent) => {
       );
     }
 
-    response = { id, imageBitmap };
+    response = { type: "texture", id, imageBitmap };
 
     // Validate outgoing response
     const responseValidationResult =
@@ -237,6 +237,7 @@ self.addEventListener("message", async (event: MessageEvent) => {
     self.postMessage(response, { transfer: [imageBitmap] });
   } catch (error) {
     response = {
+      type: "texture",
       id,
       error: error instanceof Error ? error.message : "Unknown error",
     };

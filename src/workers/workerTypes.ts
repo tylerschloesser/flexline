@@ -31,7 +31,8 @@ export const TextureWorkerRequestSchema = z.object({
   chunk: ChunkSchema.optional(),
 });
 
-export const TextureWorkerResponseSchema = z.object({
+export const TextureResponseSchema = z.object({
+  type: z.literal("texture"),
   id: z.string().min(1),
   imageBitmap: z.instanceof(ImageBitmap).optional(),
   error: z.string().optional(),
@@ -46,10 +47,16 @@ export const PregenerateResponseSchema = z.object({
   error: z.string().optional(),
 });
 
+export const TextureWorkerResponseSchema = z.discriminatedUnion("type", [
+  TextureResponseSchema,
+  PregenerateResponseSchema,
+]);
+
 export type ChunkWorkerRequest = z.infer<typeof ChunkWorkerRequestSchema>;
 export type ChunkWorkerResponse = z.infer<typeof ChunkWorkerResponseSchema>;
 export type TextureVariant = z.infer<typeof TextureVariantSchema>;
 export type TextureWorkerRequest = z.infer<typeof TextureWorkerRequestSchema>;
 export type TextureWorkerResponse = z.infer<typeof TextureWorkerResponseSchema>;
+export type TextureResponse = z.infer<typeof TextureResponseSchema>;
 export type PregenerateRequest = z.infer<typeof PregenerateRequestSchema>;
 export type PregenerateResponse = z.infer<typeof PregenerateResponseSchema>;
