@@ -4,6 +4,7 @@ export class InputManager {
   private keys: Set<string> = new Set();
   private listeners: Set<(direction: { x: number; y: number }) => void> =
     new Set();
+  private keyListeners: Set<(key: string) => void> = new Set();
   private isActive = false;
 
   initialize(): void {
@@ -31,6 +32,9 @@ export class InputManager {
       event.preventDefault();
       this.keys.add(key);
       this.updateMovement();
+    } else {
+      // Handle other keys (like Q for clearing placement)
+      this.notifyKeyListeners(key);
     }
   };
 
@@ -75,12 +79,23 @@ export class InputManager {
     this.listeners.forEach((listener) => listener(direction));
   }
 
+  private notifyKeyListeners(key: string): void {
+    this.keyListeners.forEach((listener) => listener(key));
+  }
+
   onMovement(
     callback: (direction: { x: number; y: number }) => void,
   ): () => void {
     this.listeners.add(callback);
     return () => {
       this.listeners.delete(callback);
+    };
+  }
+
+  onKeyPress(callback: (key: string) => void): () => void {
+    this.keyListeners.add(callback);
+    return () => {
+      this.keyListeners.delete(callback);
     };
   }
 

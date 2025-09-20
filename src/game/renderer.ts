@@ -459,6 +459,14 @@ export class GameRenderer {
       this.cameraMovement = direction;
     });
 
+    // Subscribe to key press events
+    this.inputManager.onKeyPress((key) => {
+      if (key === "q") {
+        // Clear selected crafting item when Q is pressed
+        this.gameState.setSelectedCraftingItem(null);
+      }
+    });
+
     // Start the camera movement update loop
     this.lastFrameTime = performance.now();
     this.startCameraUpdateLoop();
