@@ -21,7 +21,6 @@ export class GameRenderer {
   }
 
   async initialize(): Promise<void> {
-    console.log('GameRenderer: Starting initialization');
     // Initialize PIXI Application using the constructor
     this.app = new PIXI.Application();
     await this.app.init({
@@ -32,7 +31,6 @@ export class GameRenderer {
       resolution: window.devicePixelRatio || 1,
       autoDensity: true,
     });
-    console.log('GameRenderer: PIXI app initialized');
 
     // Initialize viewport
     this.viewport = new Viewport({
@@ -51,14 +49,8 @@ export class GameRenderer {
     // Convert tile coordinates (1x1 units) back to world pixel coordinates for viewport
     const worldPixelX = state.cameraX * TILE_SIZE;
     const worldPixelY = state.cameraY * TILE_SIZE;
-    console.log("Restoring camera position:", {
-      tileX: state.cameraX, tileY: state.cameraY,
-      worldPixelX, worldPixelY, zoom: state.cameraZoom
-    });
-
-    // Set initial view to center of world
-    this.viewport.moveCenter(0, 0);
-    this.viewport.setZoom(1);
+    this.viewport.moveCenter(worldPixelX, worldPixelY);
+    this.viewport.setZoom(state.cameraZoom);
 
     this.viewport.on("moved", () => {
       if (!this.viewport) return;
@@ -87,13 +79,9 @@ export class GameRenderer {
     });
 
     // Create placeholder texture and initialize textures
-    console.log('GameRenderer: Creating placeholder texture');
     this.createPlaceholderTexture();
-    console.log('GameRenderer: Initializing textures');
     await this.initializeTextures();
-    console.log('GameRenderer: Updating visible chunks');
     this.updateVisibleChunks();
-    console.log('GameRenderer: Initialization complete');
   }
 
   private handleClick(worldPixelX: number, worldPixelY: number): void {
@@ -135,7 +123,6 @@ export class GameRenderer {
         visibleChunks.add(key);
 
         if (!this.chunkContainers.has(key) && !this.pendingChunks.has(key)) {
-          console.log(`Rendering chunk ${chunkX},${chunkY}`);
           this.renderChunkAsync(chunkX, chunkY);
         }
       }
@@ -195,23 +182,19 @@ export class GameRenderer {
       let chunkTexture = this.chunkTextures.get(key);
 
       if (!chunkTexture) {
-        console.log(`Generating texture for chunk ${chunkX},${chunkY}`);
         // Only render placeholder if we don't have container yet
         if (!this.chunkContainers.has(key)) {
           this.renderPlaceholderChunk(chunkX, chunkY);
         }
 
         const chunk = await this.gameState.getOrGenerateChunkAsync(chunkX, chunkY);
-        console.log(`Got chunk data for ${chunkX},${chunkY}:`, chunk.tiles.length);
         chunkTexture = this.generateChunkTexture(chunk);
-        console.log(`Generated texture for chunk ${chunkX},${chunkY}`);
         this.chunkTextures.set(key, chunkTexture);
       }
 
       // Replace placeholder with real chunk texture
       const existingSprite = this.chunkContainers.get(key);
       if (existingSprite) {
-        console.log(`Replacing placeholder for chunk ${chunkX},${chunkY}`);
         this.viewport.removeChild(existingSprite);
         existingSprite.destroy();
       }
@@ -224,7 +207,6 @@ export class GameRenderer {
 
       this.viewport.addChild(chunkSprite);
       this.chunkContainers.set(key, chunkSprite);
-      console.log(`Added real chunk sprite for ${chunkX},${chunkY}`);
     } catch (error) {
       console.error(`Failed to generate chunk ${chunkX},${chunkY}:`, error);
     } finally {
@@ -262,11 +244,10 @@ export class GameRenderer {
   }
 
   private generateChunkTexture(chunk: Chunk): PIXI.Texture {
-    console.log('Generating chunk texture, chunk size:', CHUNK_SIZE, 'tile size:', TILE_SIZE);
     const canvas = document.createElement("canvas");
     canvas.width = CHUNK_SIZE * TILE_SIZE;
     canvas.height = CHUNK_SIZE * TILE_SIZE;
-    const ctx = canvas.getContext("2d")!;
+    const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
 
     const TEXTURE_VARIANTS = {
       landHigh: ["#8B7355", "#9B8365", "#8B6F47"],
@@ -331,15 +312,11 @@ export class GameRenderer {
       }
     }
 
-    console.log('Created canvas:', canvas.width, 'x', canvas.height);
-    const texture = PIXI.Texture.from(canvas);
-    console.log('Created PIXI texture:', texture.width, 'x', texture.height);
-    return texture;
+    return PIXI.Texture.from(canvas);
   }
 
   private async initializeTextures(): Promise<void> {
     // Textures are now generated per-chunk, so this is simplified
-    console.log('Texture initialization complete - using per-chunk generation');
   }
 
   destroy(): void {
