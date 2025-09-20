@@ -259,9 +259,8 @@ export const GameUI = memo(function GameUI({
           <Paper
             style={{
               position: "absolute",
-              top: "50%",
-              left: "50%",
-              transform: "translate(-50%, -50%)",
+              bottom: 10,
+              right: 10,
               minWidth: 200,
               pointerEvents: "none",
               zIndex: 1000,
@@ -269,16 +268,18 @@ export const GameUI = memo(function GameUI({
             p="md"
             withBorder
             shadow="md"
-            bg="rgba(255, 255, 255, 0.95)"
           >
             <Text size="lg" fw={600} mb="sm" tt="capitalize">
               {hoveredEntity.type} Inventory
             </Text>
             <Stack gap="xs">
-              {hoveredEntity.inventory &&
-              Object.keys(hoveredEntity.inventory).length > 0 ? (
-                Object.entries(hoveredEntity.inventory).map(
-                  ([resource, amount]) => (
+              {(() => {
+                const nonZeroItems = hoveredEntity.inventory
+                  ? Object.entries(hoveredEntity.inventory).filter(([, amount]) => amount > 0)
+                  : [];
+
+                return nonZeroItems.length > 0 ? (
+                  nonZeroItems.map(([resource, amount]) => (
                     <Group key={resource} justify="space-between">
                       <Text tt="capitalize" size="sm">
                         {resource}
@@ -287,13 +288,13 @@ export const GameUI = memo(function GameUI({
                         {amount}
                       </Badge>
                     </Group>
-                  ),
-                )
-              ) : (
-                <Text size="sm" c="dimmed">
-                  Empty
-                </Text>
-              )}
+                  ))
+                ) : (
+                  <Text size="sm" c="dimmed">
+                    Empty
+                  </Text>
+                );
+              })()}
             </Stack>
             {selectedItem?.type === "inventory" && (
               <Text size="xs" c="dimmed" mt="sm">
