@@ -1,6 +1,13 @@
-import type { GameState, Chunk, Inventory, ResourceType } from "./schemas";
+import type {
+  GameState,
+  Chunk,
+  Inventory,
+  ResourceType,
+  Entity,
+  EntityType,
+} from "./schemas";
 import { WorldGenerator } from "./worldGenerator";
-import { TILE_SIZE, CHUNK_SIZE } from "./schemas";
+import { TILE_SIZE, CHUNK_SIZE, ENTITY_DEFINITIONS } from "./schemas";
 import { DEFAULT_INVENTORY, SAVE_DEBOUNCE_TIME } from "./config";
 
 export class GameStateManager {
@@ -24,6 +31,8 @@ export class GameStateManager {
       cameraY: 0,
       cameraZoom: 1,
       worldSeed: this.generateSeed(),
+      entities: new Map(),
+      selectedCraftingItem: null,
     };
   }
 
@@ -183,6 +192,139 @@ export class GameStateManager {
     return { ...this.state.craftedItems };
   }
 
+  getEntities(): Map<string, Entity> {
+    return new Map(this.state.entities);
+  }
+
+  getSelectedCraftingItem(): EntityType | null {
+    return this.state.selectedCraftingItem;
+  }
+
+  setSelectedCraftingItem(entityType: EntityType | null): void {
+    this.state.selectedCraftingItem = entityType;
+    this.notify();
+  }
+
+  canPlaceEntity(
+    entityType: EntityType,
+    centerX: number,
+    centerY: number,
+  ): boolean {
+    const definition = ENTITY_DEFINITIONS[entityType];
+    if (!definition) return false;
+
+    const { width, height } = definition;
+    const startX = Math.floor(centerX - width / 2);
+    const startY = Math.floor(centerY - height / 2);
+
+    for (const entity of this.state.entities.values()) {
+      if (
+        this.entitiesOverlap(
+          startX,
+          startY,
+          width,
+          height,
+          entity.x,
+          entity.y,
+          entity.width,
+          entity.height,
+        )
+      ) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  private entitiesOverlap(
+    x1: number,
+    y1: number,
+    w1: number,
+    h1: number,
+    x2: number,
+    y2: number,
+    w2: number,
+    h2: number,
+  ): boolean {
+    return !(x1 + w1 <= x2 || x2 + w2 <= x1 || y1 + h1 <= y2 || y2 + h2 <= y1);
+  }
+
+  placeEntity(
+    entityType: EntityType,
+    centerX: number,
+    centerY: number,
+  ): boolean {
+    if (!this.canPlaceEntity(entityType, centerX, centerY)) {
+      return false;
+    }
+
+    const definition = ENTITY_DEFINITIONS[entityType];
+    const { width, height } = definition;
+    const startX = Math.floor(centerX - width / 2);
+    const startY = Math.floor(centerY - height / 2);
+
+    const entity: Entity = {
+      id: this.generateEntityId(),
+      type: entityType,
+      x: startX,
+      y: startY,
+      width,
+      height,
+    };
+
+    this.state.entities.set(entity.id, entity);
+    this.notify();
+    return true;
+  }
+
+  private generateEntityId(): string {
+    return `entity_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  }
+
+  getEntitiesInChunk(chunkX: number, chunkY: number): Entity[] {
+    const chunkStartX = chunkX * CHUNK_SIZE;
+    const chunkEndX = chunkStartX + CHUNK_SIZE;
+    const chunkStartY = chunkY * CHUNK_SIZE;
+    const chunkEndY = chunkStartY + CHUNK_SIZE;
+
+    const entitiesInChunk: Entity[] = [];
+
+    for (const entity of this.state.entities.values()) {
+      if (
+        this.entityIntersectsChunk(
+          entity,
+          chunkStartX,
+          chunkStartY,
+          chunkEndX,
+          chunkEndY,
+        )
+      ) {
+        entitiesInChunk.push(entity);
+      }
+    }
+
+    return entitiesInChunk;
+  }
+
+  private entityIntersectsChunk(
+    entity: Entity,
+    chunkStartX: number,
+    chunkStartY: number,
+    chunkEndX: number,
+    chunkEndY: number,
+  ): boolean {
+    const entityEndX = entity.x + entity.width;
+    const entityEndY = entity.y + entity.height;
+
+    return !(
+      entityEndX <= chunkStartX ||
+      entity.x >= chunkEndX ||
+      entityEndY <= chunkStartY ||
+      entity.y >= chunkEndY
+    );
+  }
+
   resetState(): void {
     this.state = this.createInitialState();
     this.worldGenerator = new WorldGenerator(this.state.worldSeed);
@@ -204,6 +346,8 @@ export class GameStateManager {
       cameraY: this.state.cameraY,
       cameraZoom: this.state.cameraZoom,
       worldSeed: this.state.worldSeed,
+      entities: Array.from(this.state.entities.entries()),
+      selectedCraftingItem: this.state.selectedCraftingItem,
     };
 
     try {
@@ -240,6 +384,8 @@ export class GameStateManager {
         cameraY: parsed.cameraY || 0,
         cameraZoom: parsed.cameraZoom || 1,
         worldSeed: parsed.worldSeed || this.generateSeed(),
+        entities: new Map<string, Entity>(parsed.entities || []),
+        selectedCraftingItem: parsed.selectedCraftingItem || null,
       };
 
       return state;

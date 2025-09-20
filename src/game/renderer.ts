@@ -30,6 +30,9 @@ export class GameRenderer {
   } | null = null;
   private cameraMovement = { x: 0, y: 0 };
   private lastFrameTime = 0;
+  private mousePosition = { x: 0, y: 0 };
+  private placementPreview: PIXI.Container | null = null;
+  private entityContainer!: PIXI.Container;
 
   constructor(canvas: HTMLCanvasElement, gameState: GameStateManager) {
     this.canvas = canvas;
@@ -99,6 +102,13 @@ export class GameRenderer {
     });
 
     this.app.stage.addChild(this.viewport);
+
+    // Create entity container for rendering entities and previews
+    this.entityContainer = new PIXI.Container();
+    this.entityContainer.zIndex = 1000; // Ensure entities are rendered on top
+    this.entityContainer.sortableChildren = true;
+    this.viewport.addChild(this.entityContainer);
+    this.viewport.sortableChildren = true;
 
     // Calculate zoom limits for initial viewport size with error handling
     try {
@@ -187,13 +197,29 @@ export class GameRenderer {
       this.handleClick(worldPoint.x, worldPoint.y);
     });
 
+    // Track mouse movement for placement preview
+    this.viewport.on("pointermove", (event) => {
+      if (!this.viewport) return;
+      const worldPoint = this.viewport.toWorld(event.global);
+      this.mousePosition.x = worldPoint.x;
+      this.mousePosition.y = worldPoint.y;
+      this.updatePlacementPreview();
+    });
+
     // Initialize input manager and camera movement
     this.initializeCameraControls();
+
+    // Subscribe to game state changes
+    this.gameState.subscribe(() => {
+      this.renderEntities();
+      this.updatePlacementPreview();
+    });
 
     // Create placeholder texture and initialize textures
     this.createPlaceholderTexture();
     await this.initializeTextures();
     this.updateVisibleChunks();
+    this.renderEntities();
   }
 
   private handleClick(worldPixelX: number, worldPixelY: number): void {
@@ -201,8 +227,22 @@ export class GameRenderer {
     const tileX = Math.floor(worldPixelX / TILE_SIZE);
     const tileY = Math.floor(worldPixelY / TILE_SIZE);
 
-    // Mine resource (resources are infinite, no chunk regeneration needed)
-    this.gameState.mineResource(tileX, tileY);
+    const selectedItem = this.gameState.getSelectedCraftingItem();
+
+    if (selectedItem) {
+      // Try to place entity
+      const success = this.gameState.placeEntity(
+        selectedItem,
+        tileX + 0.5,
+        tileY + 0.5,
+      );
+      if (success) {
+        this.renderEntities();
+      }
+    } else {
+      // Mine resource (resources are infinite, no chunk regeneration needed)
+      this.gameState.mineResource(tileX, tileY);
+    }
   }
 
   private updateVisibleChunks(): void {
@@ -421,6 +461,125 @@ export class GameRenderer {
     };
 
     requestAnimationFrame(updateCamera);
+  }
+
+  private updatePlacementPreview(): void {
+    if (!this.viewport) return;
+
+    // Clear existing preview
+    if (this.placementPreview) {
+      this.entityContainer.removeChild(this.placementPreview);
+      this.placementPreview.destroy();
+      this.placementPreview = null;
+    }
+
+    const selectedItem = this.gameState.getSelectedCraftingItem();
+    if (!selectedItem) return;
+
+    // Convert mouse position (world pixels) to tile coordinates
+    const tileX = Math.floor(this.mousePosition.x / TILE_SIZE);
+    const tileY = Math.floor(this.mousePosition.y / TILE_SIZE);
+    const centerX = tileX + 0.5;
+    const centerY = tileY + 0.5;
+
+    // Check if placement is valid
+    const canPlace = this.gameState.canPlaceEntity(
+      selectedItem,
+      centerX,
+      centerY,
+    );
+
+    // Create preview
+    this.placementPreview = this.createEntitySprite(
+      selectedItem,
+      centerX,
+      centerY,
+    );
+    this.placementPreview.alpha = 0.6;
+
+    // Apply color tint based on validity
+    if (canPlace) {
+      this.placementPreview.tint = 0x00ff00; // Green tint for valid placement
+    } else {
+      this.placementPreview.tint = 0xff0000; // Red tint for invalid placement
+    }
+
+    this.entityContainer.addChild(this.placementPreview);
+  }
+
+  private renderEntities(): void {
+    // Clear existing entities
+    for (const child of this.entityContainer.children.slice()) {
+      if (child !== this.placementPreview) {
+        this.entityContainer.removeChild(child);
+        child.destroy();
+      }
+    }
+
+    // Render all entities
+    const entities = this.gameState.getEntities();
+    for (const entity of entities.values()) {
+      const centerX = entity.x + entity.width / 2;
+      const centerY = entity.y + entity.height / 2;
+      const sprite = this.createEntitySprite(entity.type, centerX, centerY);
+      this.entityContainer.addChild(sprite);
+    }
+  }
+
+  private createEntitySprite(
+    entityType: string,
+    centerX: number,
+    centerY: number,
+  ): PIXI.Container {
+    const container = new PIXI.Container();
+
+    // For now, create a simple rectangle to represent the entity
+    // In the future, this could load actual textures
+    const graphics = new PIXI.Graphics();
+
+    if (entityType === "furnace") {
+      // Draw a 2x2 furnace
+      graphics.beginFill(0x8b4513); // Brown color for furnace
+      graphics.drawRect(0, 0, 2 * TILE_SIZE, 2 * TILE_SIZE);
+      graphics.endFill();
+
+      // Add some detail - chimney
+      graphics.beginFill(0x654321);
+      graphics.drawRect(
+        TILE_SIZE * 0.7,
+        TILE_SIZE * 0.2,
+        TILE_SIZE * 0.6,
+        TILE_SIZE * 0.4,
+      );
+      graphics.endFill();
+
+      // Add fire opening
+      graphics.beginFill(0x000000);
+      graphics.drawRect(
+        TILE_SIZE * 0.3,
+        TILE_SIZE * 1.2,
+        TILE_SIZE * 0.4,
+        TILE_SIZE * 0.3,
+      );
+      graphics.endFill();
+      graphics.beginFill(0xff4500);
+      graphics.drawRect(
+        TILE_SIZE * 0.35,
+        TILE_SIZE * 1.25,
+        TILE_SIZE * 0.3,
+        TILE_SIZE * 0.2,
+      );
+      graphics.endFill();
+    }
+
+    // Position the graphics relative to center
+    graphics.x = -(2 * TILE_SIZE) / 2;
+    graphics.y = -(2 * TILE_SIZE) / 2;
+
+    container.addChild(graphics);
+    container.position.set(centerX * TILE_SIZE, centerY * TILE_SIZE);
+
+    return container;
   }
 
   destroy(): void {

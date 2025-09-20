@@ -1,5 +1,6 @@
 import { useState, useEffect, memo, useMemo } from "react";
 import { GameStateManager } from "../game/gameState";
+import type { EntityType } from "../game/schemas";
 import "./GameUI.css";
 
 interface GameUIProps {
@@ -9,11 +10,15 @@ interface GameUIProps {
 export const GameUI = memo(function GameUI({ gameState }: GameUIProps) {
   const [inventory, setInventory] = useState(gameState.getInventory());
   const [craftedItems, setCraftedItems] = useState(gameState.getCraftedItems());
+  const [selectedCraftingItem, setSelectedCraftingItem] = useState(
+    gameState.getSelectedCraftingItem(),
+  );
 
   useEffect(() => {
     const unsubscribe = gameState.subscribe(() => {
       setInventory(gameState.getInventory());
       setCraftedItems(gameState.getCraftedItems());
+      setSelectedCraftingItem(gameState.getSelectedCraftingItem());
     });
 
     return unsubscribe;
@@ -21,6 +26,14 @@ export const GameUI = memo(function GameUI({ gameState }: GameUIProps) {
 
   const handleCraft = (recipe: string) => {
     gameState.craftItem(recipe);
+  };
+
+  const handleSelectItem = (itemType: EntityType) => {
+    if (selectedCraftingItem === itemType) {
+      gameState.setSelectedCraftingItem(null);
+    } else {
+      gameState.setSelectedCraftingItem(itemType);
+    }
   };
 
   const handleReset = () => {
@@ -69,6 +82,21 @@ export const GameUI = memo(function GameUI({ gameState }: GameUIProps) {
             </span>
           </div>
         </div>
+
+        {craftedItems.furnace && craftedItems.furnace > 0 && (
+          <div className="placement-section">
+            <h3>Place Items</h3>
+            <div className="placement-list">
+              <button
+                onClick={() => handleSelectItem("furnace")}
+                className={`placement-button ${selectedCraftingItem === "furnace" ? "selected" : ""}`}
+              >
+                {selectedCraftingItem === "furnace" ? "✓ " : ""}Furnace{" "}
+                {selectedCraftingItem === "furnace" ? "(Selected)" : ""}
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="ui-panel controls-panel">
@@ -77,6 +105,8 @@ export const GameUI = memo(function GameUI({ gameState }: GameUIProps) {
           <p>🖱️ Drag to pan</p>
           <p>🎯 Click resources to mine</p>
           <p>🔍 Scroll to zoom</p>
+          <p>🏗️ Select items to place them</p>
+          <p>📦 Click to place selected items</p>
         </div>
         <button onClick={handleReset} className="reset-button">
           Reset Game

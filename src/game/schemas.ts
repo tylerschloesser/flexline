@@ -37,6 +37,19 @@ export const CraftingRecipeSchema = z.object({
 });
 export type CraftingRecipe = z.infer<typeof CraftingRecipeSchema>;
 
+export const EntityTypeSchema = z.enum(["furnace"]);
+export type EntityType = z.infer<typeof EntityTypeSchema>;
+
+export const EntitySchema = z.object({
+  id: z.string(),
+  type: EntityTypeSchema,
+  x: z.number(),
+  y: z.number(),
+  width: z.number(),
+  height: z.number(),
+});
+export type Entity = z.infer<typeof EntitySchema>;
+
 export const GameStateSchema = z.object({
   chunks: z.map(z.string(), ChunkSchema),
   inventory: InventorySchema,
@@ -45,6 +58,8 @@ export const GameStateSchema = z.object({
   cameraY: z.number(),
   cameraZoom: z.number(),
   worldSeed: z.string(),
+  entities: z.map(z.string(), EntitySchema),
+  selectedCraftingItem: EntityTypeSchema.nullable(),
 });
 export type GameState = z.infer<typeof GameStateSchema>;
 
@@ -57,4 +72,11 @@ export const CRAFTING_RECIPES: Record<string, CraftingRecipe> = {
     output: "furnace",
     outputAmount: 1,
   },
+};
+
+export const ENTITY_DEFINITIONS: Record<
+  EntityType,
+  { width: number; height: number }
+> = {
+  furnace: { width: 2, height: 2 },
 };
