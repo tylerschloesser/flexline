@@ -106,12 +106,6 @@ async function createTileTexture(variant: TextureVariant): Promise<ImageBitmap> 
 }
 
 async function createChunkTexture(chunk: Chunk): Promise<ImageBitmap> {
-  const cacheKey = `chunk_${chunk.x}_${chunk.y}`;
-
-  if (textureCache.has(cacheKey)) {
-    return textureCache.get(cacheKey)!;
-  }
-
   try {
     const canvas = new OffscreenCanvas(CHUNK_SIZE * TILE_SIZE, CHUNK_SIZE * TILE_SIZE);
     const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
@@ -179,9 +173,7 @@ async function createChunkTexture(chunk: Chunk): Promise<ImageBitmap> {
       }
     }
 
-    const imageBitmap = await createImageBitmap(canvas);
-    textureCache.set(cacheKey, imageBitmap);
-    return imageBitmap;
+    return await createImageBitmap(canvas);
   } catch {
     // Create a simple fallback texture
     const canvas = new OffscreenCanvas(CHUNK_SIZE * TILE_SIZE, CHUNK_SIZE * TILE_SIZE);
@@ -189,9 +181,7 @@ async function createChunkTexture(chunk: Chunk): Promise<ImageBitmap> {
     ctx.fillStyle = '#404040';
     ctx.fillRect(0, 0, CHUNK_SIZE * TILE_SIZE, CHUNK_SIZE * TILE_SIZE);
 
-    const imageBitmap = await createImageBitmap(canvas);
-    textureCache.set(cacheKey, imageBitmap);
-    return imageBitmap;
+    return await createImageBitmap(canvas);
   }
 }
 

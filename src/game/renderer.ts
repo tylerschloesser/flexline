@@ -130,13 +130,13 @@ export class GameRenderer {
       }
     }
 
-    // Remove chunks that are no longer visible (simplified cleanup)
+    // Remove chunks that are no longer visible (keep textures cached)
     for (const [key, container] of this.chunkContainers) {
       if (!visibleChunks.has(key)) {
         this.viewport.removeChild(container);
         container.destroy({ children: true });
         this.chunkContainers.delete(key);
-        this.chunkTextures.delete(key);
+        // Keep texture in cache for fast re-rendering when chunk comes back into view
       }
     }
   }
