@@ -542,26 +542,32 @@ export class GameRenderer {
       graphics.rect(0, 0, 2 * TILE_SIZE, 2 * TILE_SIZE).fill(0x8b4513); // Brown color for furnace
 
       // Add some detail - chimney
-      graphics.rect(
-        TILE_SIZE * 0.7,
-        TILE_SIZE * 0.2,
-        TILE_SIZE * 0.6,
-        TILE_SIZE * 0.4,
-      ).fill(0x654321);
+      graphics
+        .rect(
+          TILE_SIZE * 0.7,
+          TILE_SIZE * 0.2,
+          TILE_SIZE * 0.6,
+          TILE_SIZE * 0.4,
+        )
+        .fill(0x654321);
 
       // Add fire opening
-      graphics.rect(
-        TILE_SIZE * 0.3,
-        TILE_SIZE * 1.2,
-        TILE_SIZE * 0.4,
-        TILE_SIZE * 0.3,
-      ).fill(0x000000);
-      graphics.rect(
-        TILE_SIZE * 0.35,
-        TILE_SIZE * 1.25,
-        TILE_SIZE * 0.3,
-        TILE_SIZE * 0.2,
-      ).fill(0xff4500);
+      graphics
+        .rect(
+          TILE_SIZE * 0.3,
+          TILE_SIZE * 1.2,
+          TILE_SIZE * 0.4,
+          TILE_SIZE * 0.3,
+        )
+        .fill(0x000000);
+      graphics
+        .rect(
+          TILE_SIZE * 0.35,
+          TILE_SIZE * 1.25,
+          TILE_SIZE * 0.3,
+          TILE_SIZE * 0.2,
+        )
+        .fill(0xff4500);
     }
 
     // Position the graphics relative to center

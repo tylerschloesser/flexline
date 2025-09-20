@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { game } from "./game/gameInstance";
 import { GameUI } from "./components/GameUI";
-import "./App.css";
 
 function App() {
   const [gameState, setGameState] = useState(game.getGameState());
