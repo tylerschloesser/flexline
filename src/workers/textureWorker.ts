@@ -1,26 +1,15 @@
 import { TILE_SIZE, CHUNK_SIZE } from "../game/schemas";
 import type { Chunk } from "../game/schemas";
 import invariant from "tiny-invariant";
-
-interface TextureVariant {
-  baseColor: string;
-  noiseColor: string;
-  noiseOpacity: number;
-}
-
-interface TextureRequest {
-  id: string;
-  type: "tile" | "resource" | "chunk";
-  variant?: TextureVariant;
-  resourceColor?: string;
-  chunk?: Chunk;
-}
-
-interface TextureResponse {
-  id: string;
-  imageBitmap: ImageBitmap;
-  error?: string;
-}
+import {
+  TextureWorkerRequestSchema,
+  TextureWorkerResponseSchema,
+  PregenerateRequestSchema,
+  PregenerateResponseSchema,
+  type TextureWorkerResponse,
+  type TextureVariant,
+  type PregenerateResponse,
+} from "./workerTypes";
 
 const TEXTURE_VARIANTS: Record<string, TextureVariant[]> = {
   landHigh: [
@@ -201,11 +190,25 @@ async function createResourceTexture(color: string): Promise<ImageBitmap> {
   return imageBitmap;
 }
 
-self.addEventListener(
-  "message",
-  async (event: MessageEvent<TextureRequest>) => {
-    const { id, type, variant, resourceColor, chunk } = event.data;
+self.addEventListener("message", async (event: MessageEvent) => {
+  // Check if this is a pregenerate request first
+  const pregenerateValidation = PregenerateRequestSchema.safeParse(event.data);
+  if (pregenerateValidation.success) {
+    await handlePregenerateRequest();
+    return;
+  }
 
+  // Validate texture request immediately
+  const validationResult = TextureWorkerRequestSchema.safeParse(event.data);
+  invariant(
+    validationResult.success,
+    `Invalid request: ${validationResult.error?.message}`,
+  );
+
+  const { id, type, variant, resourceColor, chunk } = validationResult.data;
+  let response: TextureWorkerResponse;
+
+  try {
     let imageBitmap: ImageBitmap;
 
     if (type === "tile" && variant) {
@@ -215,16 +218,34 @@ self.addEventListener(
     } else if (type === "chunk" && chunk) {
       imageBitmap = await createChunkTexture(chunk);
     } else {
-      invariant(false, `Invalid texture request parameters: type=${type}`);
+      invariant(
+        false,
+        `Invalid texture request parameters: type=${type}, missing required data`,
+      );
     }
 
-    const response: TextureResponse = { id, imageBitmap };
-    self.postMessage(response, { transfer: [imageBitmap] });
-  },
-);
+    response = { id, imageBitmap };
 
-self.addEventListener("message", async (event) => {
-  if (event.data.type === "pregenerate") {
+    // Validate outgoing response
+    const responseValidationResult =
+      TextureWorkerResponseSchema.safeParse(response);
+    invariant(
+      responseValidationResult.success,
+      `Invalid response format: ${responseValidationResult.error?.message}`,
+    );
+
+    self.postMessage(response, { transfer: [imageBitmap] });
+  } catch (error) {
+    response = {
+      id,
+      error: error instanceof Error ? error.message : "Unknown error",
+    };
+    self.postMessage(response);
+  }
+});
+
+async function handlePregenerateRequest(): Promise<void> {
+  try {
     for (const [, variants] of Object.entries(TEXTURE_VARIANTS)) {
       for (const variant of variants) {
         await createTileTexture(variant);
@@ -235,6 +256,22 @@ self.addEventListener("message", async (event) => {
       await createResourceTexture(color);
     }
 
-    self.postMessage({ type: "pregenerate-complete" });
+    const response: PregenerateResponse = { type: "pregenerate-complete" };
+
+    // Validate pregenerate response
+    const validationResult = PregenerateResponseSchema.safeParse(response);
+    invariant(
+      validationResult.success,
+      `Invalid pregenerate response: ${validationResult.error?.message}`,
+    );
+
+    self.postMessage(response);
+  } catch (error) {
+    const errorResponse: PregenerateResponse = {
+      type: "pregenerate-error",
+      error:
+        error instanceof Error ? error.message : "Unknown pregenerate error",
+    };
+    self.postMessage(errorResponse);
   }
-});
+}
