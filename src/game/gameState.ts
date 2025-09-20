@@ -1,16 +1,20 @@
 import type { GameState, Chunk, Inventory, ResourceType } from "./schemas";
 import { WorldGenerator } from "./worldGenerator";
+import { WorkerManager } from "../workers/WorkerManager";
 import { TILE_SIZE, CHUNK_SIZE } from "./schemas";
 
 export class GameStateManager {
   private state: GameState;
   private worldGenerator: WorldGenerator;
+  private workerManager: WorkerManager;
   private listeners: Set<() => void> = new Set();
   private saveTimeout: NodeJS.Timeout | null = null;
+  private chunkGenerationPromises = new Map<string, Promise<Chunk>>();
 
   constructor() {
     this.state = this.loadState() || this.createInitialState();
     this.worldGenerator = new WorldGenerator(this.state.worldSeed);
+    this.workerManager = new WorkerManager();
   }
 
   private createInitialState(): GameState {
@@ -71,6 +75,37 @@ export class GameStateManager {
     }
 
     return this.state.chunks.get(key)!;
+  }
+
+  async getOrGenerateChunkAsync(chunkX: number, chunkY: number): Promise<Chunk> {
+    const key = this.worldGenerator.getChunkKey(chunkX, chunkY);
+
+    if (this.state.chunks.has(key)) {
+      return this.state.chunks.get(key)!;
+    }
+
+    if (this.chunkGenerationPromises.has(key)) {
+      return this.chunkGenerationPromises.get(key)!;
+    }
+
+    const promise = this.workerManager.generateChunk(chunkX, chunkY, this.state.worldSeed)
+      .then(chunk => {
+        this.state.chunks.set(key, chunk);
+        this.chunkGenerationPromises.delete(key);
+        this.notify();
+        return chunk;
+      })
+      .catch(error => {
+        console.error(`Failed to generate chunk ${chunkX},${chunkY}:`, error);
+        this.chunkGenerationPromises.delete(key);
+        const fallbackChunk = this.worldGenerator.generateChunk(chunkX, chunkY);
+        this.state.chunks.set(key, fallbackChunk);
+        this.notify();
+        return fallbackChunk;
+      });
+
+    this.chunkGenerationPromises.set(key, promise);
+    return promise;
   }
 
   mineResource(tileX: number, tileY: number): boolean {
@@ -158,8 +193,15 @@ export class GameStateManager {
 
   resetState(): void {
     this.state = this.createInitialState();
+    this.worldGenerator = new WorldGenerator(this.state.worldSeed);
+    this.chunkGenerationPromises.clear();
     localStorage.removeItem("gameState");
     this.notify();
+  }
+
+  destroy(): void {
+    this.workerManager.destroy();
+    this.chunkGenerationPromises.clear();
   }
 
   private saveState(): void {
