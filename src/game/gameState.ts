@@ -217,6 +217,7 @@ export class GameStateManager {
     const startX = Math.floor(centerX - width / 2);
     const startY = Math.floor(centerY - height / 2);
 
+    // Check for entity overlaps
     for (const entity of this.state.entities.values()) {
       if (
         this.entitiesOverlap(
@@ -231,6 +232,34 @@ export class GameStateManager {
         )
       ) {
         return false;
+      }
+    }
+
+    // Check if any tiles under the entity are water
+    for (let y = startY; y < startY + height; y++) {
+      for (let x = startX; x < startX + width; x++) {
+        const { chunkX, chunkY } = this.worldGenerator.getChunkCoordinates(
+          x,
+          y,
+        );
+        const chunk = this.getOrGenerateChunk(chunkX, chunkY);
+
+        const localTileX = x - chunkX * CHUNK_SIZE;
+        const localTileY = y - chunkY * CHUNK_SIZE;
+
+        if (
+          localTileX < 0 ||
+          localTileX >= CHUNK_SIZE ||
+          localTileY < 0 ||
+          localTileY >= CHUNK_SIZE
+        ) {
+          return false; // Out of bounds
+        }
+
+        const tile = chunk.tiles[localTileY][localTileX];
+        if (tile.type === "water") {
+          return false; // Cannot place on water
+        }
       }
     }
 
