@@ -10,38 +10,64 @@ import {
   Box,
 } from "@mantine/core";
 import { GameStateManager } from "../game/gameState";
-import type { EntityType } from "../game/schemas";
+import { GameRenderer } from "../game/renderer";
+import type { EntityType, ResourceType, Entity } from "../game/schemas";
 
 interface GameUIProps {
   gameState: GameStateManager;
+  renderer: GameRenderer;
 }
 
-export const GameUI = memo(function GameUI({ gameState }: GameUIProps) {
+export const GameUI = memo(function GameUI({
+  gameState,
+  renderer,
+}: GameUIProps) {
   const [inventory, setInventory] = useState(gameState.getInventory());
   const [craftedItems, setCraftedItems] = useState(gameState.getCraftedItems());
+  const [selectedItem, setSelectedItem] = useState(gameState.getSelectedItem());
   const [selectedCraftingItem, setSelectedCraftingItem] = useState(
     gameState.getSelectedCraftingItem(),
   );
+  const [hoveredEntity, setHoveredEntity] = useState<Entity | null>(null);
 
   useEffect(() => {
     const unsubscribe = gameState.subscribe(() => {
       setInventory(gameState.getInventory());
       setCraftedItems(gameState.getCraftedItems());
+      setSelectedItem(gameState.getSelectedItem());
       setSelectedCraftingItem(gameState.getSelectedCraftingItem());
     });
 
     return unsubscribe;
   }, [gameState]);
 
+  useEffect(() => {
+    const unsubscribeHover = renderer.onEntityHover((entity) => {
+      setHoveredEntity(entity);
+    });
+
+    return unsubscribeHover;
+  }, [renderer]);
+
   const handleCraft = (recipe: string) => {
     gameState.craftItem(recipe);
   };
 
-  const handleSelectItem = (itemType: EntityType) => {
+  const handleSelectCraftedItem = (itemType: EntityType) => {
     if (selectedCraftingItem === itemType) {
       gameState.setSelectedCraftingItem(null);
     } else {
       gameState.setSelectedCraftingItem(itemType);
+    }
+  };
+
+  const handleSelectInventoryItem = (resourceType: ResourceType) => {
+    const currentSelectedInventoryItem =
+      selectedItem?.type === "inventory" ? selectedItem.itemId : null;
+    if (currentSelectedInventoryItem === resourceType) {
+      gameState.setSelectedInventoryItem(null);
+    } else {
+      gameState.setSelectedInventoryItem(resourceType);
     }
   };
 
@@ -93,14 +119,40 @@ export const GameUI = memo(function GameUI({ gameState }: GameUIProps) {
           Inventory
         </Text>
         <Stack gap="xs">
-          {Object.entries(inventory).map(([resource, amount]) => (
-            <Group key={resource} justify="space-between">
-              <Text tt="capitalize">{resource}</Text>
-              <Badge color="green" variant="light">
-                {amount}
-              </Badge>
-            </Group>
-          ))}
+          {Object.entries(inventory).map(([resource, amount]) => {
+            const resourceType = resource as ResourceType;
+            const isSelected =
+              selectedItem?.type === "inventory" &&
+              selectedItem.itemId === resourceType;
+            const canSelect = amount > 0;
+
+            return (
+              <Group key={resource} justify="space-between">
+                <Button
+                  variant={
+                    isSelected ? "filled" : canSelect ? "subtle" : "default"
+                  }
+                  color={isSelected ? "orange" : "green"}
+                  size="compact-sm"
+                  disabled={!canSelect}
+                  onClick={() =>
+                    canSelect && handleSelectInventoryItem(resourceType)
+                  }
+                  leftSection={isSelected ? "✓" : ""}
+                  style={{
+                    justifyContent: "flex-start",
+                    flex: 1,
+                    textTransform: "capitalize",
+                  }}
+                >
+                  {resource} {isSelected ? "(Selected)" : ""}
+                </Button>
+                <Badge color={canSelect ? "green" : "gray"} variant="light">
+                  {amount}
+                </Badge>
+              </Group>
+            );
+          })}
         </Stack>
       </Paper>
 
@@ -145,7 +197,7 @@ export const GameUI = memo(function GameUI({ gameState }: GameUIProps) {
             </Text>
             <Stack gap="xs">
               <Button
-                onClick={() => handleSelectItem("furnace")}
+                onClick={() => handleSelectCraftedItem("furnace")}
                 variant={
                   selectedCraftingItem === "furnace" ? "filled" : "light"
                 }
@@ -185,16 +237,71 @@ export const GameUI = memo(function GameUI({ gameState }: GameUIProps) {
             🔍 Scroll to zoom
           </Text>
           <Text size="sm" c="dimmed">
-            🏗️ Select items to place them
+            🏗️ Select crafted items to place them
           </Text>
           <Text size="sm" c="dimmed">
-            📦 Click to place selected items
+            📦 Select inventory items to insert into entities
+          </Text>
+          <Text size="sm" c="dimmed">
+            🎯 Hover over entities and click to insert selected items
           </Text>
         </Stack>
         <Button onClick={handleReset} color="red" fullWidth>
           Reset Game
         </Button>
       </Paper>
+
+      {/* Entity Inventory Hover UI */}
+      {hoveredEntity &&
+        ((hoveredEntity.inventory &&
+          Object.keys(hoveredEntity.inventory).length > 0) ||
+          selectedItem?.type === "inventory") && (
+          <Paper
+            style={{
+              position: "absolute",
+              top: "50%",
+              left: "50%",
+              transform: "translate(-50%, -50%)",
+              minWidth: 200,
+              pointerEvents: "none",
+              zIndex: 1000,
+            }}
+            p="md"
+            withBorder
+            shadow="md"
+            bg="rgba(255, 255, 255, 0.95)"
+          >
+            <Text size="lg" fw={600} mb="sm" tt="capitalize">
+              {hoveredEntity.type} Inventory
+            </Text>
+            <Stack gap="xs">
+              {hoveredEntity.inventory &&
+              Object.keys(hoveredEntity.inventory).length > 0 ? (
+                Object.entries(hoveredEntity.inventory).map(
+                  ([resource, amount]) => (
+                    <Group key={resource} justify="space-between">
+                      <Text tt="capitalize" size="sm">
+                        {resource}
+                      </Text>
+                      <Badge color="blue" variant="light" size="sm">
+                        {amount}
+                      </Badge>
+                    </Group>
+                  ),
+                )
+              ) : (
+                <Text size="sm" c="dimmed">
+                  Empty
+                </Text>
+              )}
+            </Stack>
+            {selectedItem?.type === "inventory" && (
+              <Text size="xs" c="dimmed" mt="sm">
+                Click to insert {selectedItem.itemId}
+              </Text>
+            )}
+          </Paper>
+        )}
     </Box>
   );
 });

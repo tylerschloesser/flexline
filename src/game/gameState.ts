@@ -5,6 +5,7 @@ import type {
   ResourceType,
   Entity,
   EntityType,
+  SelectedItem,
 } from "./schemas";
 import { WorldGenerator } from "./worldGenerator";
 import { TILE_SIZE, CHUNK_SIZE, ENTITY_DEFINITIONS } from "./schemas";
@@ -32,7 +33,7 @@ export class GameStateManager {
       cameraZoom: 1,
       worldSeed: this.generateSeed(),
       entities: new Map(),
-      selectedCraftingItem: null,
+      selectedItem: null,
     };
   }
 
@@ -196,12 +197,44 @@ export class GameStateManager {
     return new Map(this.state.entities);
   }
 
+  getSelectedItem(): SelectedItem | null {
+    return this.state.selectedItem;
+  }
+
+  setSelectedItem(selectedItem: SelectedItem | null): void {
+    this.state.selectedItem = selectedItem;
+    this.notify();
+  }
+
   getSelectedCraftingItem(): EntityType | null {
-    return this.state.selectedCraftingItem;
+    if (this.state.selectedItem?.type === "crafted") {
+      return this.state.selectedItem.itemId;
+    }
+    return null;
   }
 
   setSelectedCraftingItem(entityType: EntityType | null): void {
-    this.state.selectedCraftingItem = entityType;
+    if (entityType) {
+      this.state.selectedItem = { type: "crafted", itemId: entityType };
+    } else {
+      this.state.selectedItem = null;
+    }
+    this.notify();
+  }
+
+  getSelectedInventoryItem(): ResourceType | null {
+    if (this.state.selectedItem?.type === "inventory") {
+      return this.state.selectedItem.itemId;
+    }
+    return null;
+  }
+
+  setSelectedInventoryItem(resourceType: ResourceType | null): void {
+    if (resourceType && this.state.inventory[resourceType] > 0) {
+      this.state.selectedItem = { type: "inventory", itemId: resourceType };
+    } else {
+      this.state.selectedItem = null;
+    }
     this.notify();
   }
 
@@ -308,6 +341,7 @@ export class GameStateManager {
       y: startY,
       width,
       height,
+      inventory: { ...DEFAULT_INVENTORY },
     };
 
     this.state.entities.set(entity.id, entity);
@@ -318,9 +352,10 @@ export class GameStateManager {
     // If count reaches 0 and this was the selected item, clear selection
     if (
       this.state.craftedItems[entityType] <= 0 &&
-      this.state.selectedCraftingItem === entityType
+      this.state.selectedItem?.type === "crafted" &&
+      this.state.selectedItem?.itemId === entityType
     ) {
-      this.state.selectedCraftingItem = null;
+      this.state.selectedItem = null;
     }
 
     this.notify();
@@ -329,6 +364,49 @@ export class GameStateManager {
 
   private generateEntityId(): string {
     return `entity_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  }
+
+  getEntityAt(tileX: number, tileY: number): Entity | null {
+    for (const entity of this.state.entities.values()) {
+      if (
+        tileX >= entity.x &&
+        tileX < entity.x + entity.width &&
+        tileY >= entity.y &&
+        tileY < entity.y + entity.height
+      ) {
+        return entity;
+      }
+    }
+    return null;
+  }
+
+  insertItemIntoEntity(
+    entityId: string,
+    resourceType: ResourceType,
+    amount: number = 1,
+  ): boolean {
+    const entity = this.state.entities.get(entityId);
+    if (!entity) return false;
+
+    // Check if we have enough of the resource
+    if (this.state.inventory[resourceType] < amount) return false;
+
+    // Initialize entity inventory if it doesn't exist
+    if (!entity.inventory) {
+      entity.inventory = { ...DEFAULT_INVENTORY };
+    }
+
+    // Initialize the resource amount if it doesn't exist
+    if (!entity.inventory[resourceType]) {
+      entity.inventory[resourceType] = 0;
+    }
+
+    // Transfer the item
+    this.state.inventory[resourceType] -= amount;
+    entity.inventory[resourceType] += amount;
+
+    this.notify();
+    return true;
   }
 
   getEntitiesInChunk(chunkX: number, chunkY: number): Entity[] {
@@ -396,7 +474,7 @@ export class GameStateManager {
       cameraZoom: this.state.cameraZoom,
       worldSeed: this.state.worldSeed,
       entities: Array.from(this.state.entities.entries()),
-      selectedCraftingItem: this.state.selectedCraftingItem,
+      selectedItem: this.state.selectedItem,
     };
 
     try {
@@ -434,7 +512,11 @@ export class GameStateManager {
         cameraZoom: parsed.cameraZoom || 1,
         worldSeed: parsed.worldSeed || this.generateSeed(),
         entities: new Map<string, Entity>(parsed.entities || []),
-        selectedCraftingItem: parsed.selectedCraftingItem || null,
+        selectedItem:
+          parsed.selectedItem ||
+          (parsed.selectedCraftingItem
+            ? { type: "crafted" as const, itemId: parsed.selectedCraftingItem }
+            : null),
       };
 
       return state;
