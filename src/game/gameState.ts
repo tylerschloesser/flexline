@@ -288,6 +288,14 @@ export class GameStateManager {
       return false;
     }
 
+    // Check if we have the item to place
+    if (
+      !this.state.craftedItems[entityType] ||
+      this.state.craftedItems[entityType] <= 0
+    ) {
+      return false;
+    }
+
     const definition = ENTITY_DEFINITIONS[entityType];
     const { width, height } = definition;
     const startX = Math.floor(centerX - width / 2);
@@ -303,6 +311,18 @@ export class GameStateManager {
     };
 
     this.state.entities.set(entity.id, entity);
+
+    // Reduce the crafted item count by 1
+    this.state.craftedItems[entityType] -= 1;
+
+    // If count reaches 0 and this was the selected item, clear selection
+    if (
+      this.state.craftedItems[entityType] <= 0 &&
+      this.state.selectedCraftingItem === entityType
+    ) {
+      this.state.selectedCraftingItem = null;
+    }
+
     this.notify();
     return true;
   }
