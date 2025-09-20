@@ -8,8 +8,8 @@ export class GameStateManager {
   private saveTimeout: NodeJS.Timeout | null = null;
 
   constructor() {
-    this.worldGenerator = new WorldGenerator();
     this.state = this.loadState() || this.createInitialState();
+    this.worldGenerator = new WorldGenerator(this.state.worldSeed);
   }
 
   private createInitialState(): GameState {
@@ -26,7 +26,12 @@ export class GameStateManager {
       cameraX: 0,
       cameraY: 0,
       cameraZoom: 1,
+      worldSeed: this.generateSeed(),
     };
+  }
+
+  private generateSeed(): string {
+    return Date.now().toString(36) + Math.random().toString(36).substr(2);
   }
 
   getState(): GameState {
@@ -163,6 +168,7 @@ export class GameStateManager {
       cameraX: this.state.cameraX,
       cameraY: this.state.cameraY,
       cameraZoom: this.state.cameraZoom,
+      worldSeed: this.state.worldSeed,
     };
 
     try {
@@ -200,6 +206,7 @@ export class GameStateManager {
         cameraX: parsed.cameraX || 0,
         cameraY: parsed.cameraY || 0,
         cameraZoom: parsed.cameraZoom || 1,
+        worldSeed: parsed.worldSeed || this.generateSeed(),
       };
 
       return state;

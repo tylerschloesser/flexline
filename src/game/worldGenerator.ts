@@ -1,11 +1,23 @@
 import { createNoise2D } from "simplex-noise";
+import Prando from "prando";
 import type { Chunk, Tile, ResourceType } from "./schemas";
 import { CHUNK_SIZE } from "./schemas";
 
 export class WorldGenerator {
-  private terrainNoise = createNoise2D();
-  private resourceNoise = createNoise2D();
-  private elevationNoise = createNoise2D();
+  private terrainNoise;
+  private resourceNoise;
+  private elevationNoise;
+  private resourceSpawnNoise;
+  private resourceAmountNoise;
+
+  constructor(seed: string) {
+    const rng = new Prando(seed);
+    this.terrainNoise = createNoise2D(() => rng.next());
+    this.resourceNoise = createNoise2D(() => rng.next());
+    this.elevationNoise = createNoise2D(() => rng.next());
+    this.resourceSpawnNoise = createNoise2D(() => rng.next());
+    this.resourceAmountNoise = createNoise2D(() => rng.next());
+  }
 
   generateChunk(chunkX: number, chunkY: number): Chunk {
     const tiles: Tile[][] = [];
@@ -22,6 +34,8 @@ export class WorldGenerator {
           worldY * 0.025,
         );
         const resourceValue = this.resourceNoise(worldX * 0.05, worldY * 0.05);
+        const resourceSpawnValue = this.resourceSpawnNoise(worldX * 0.1, worldY * 0.1);
+        const resourceAmountValue = this.resourceAmountNoise(worldX * 0.08, worldY * 0.08);
 
         const type = terrainValue > -0.1 ? "land" : "water";
         const elevation =
@@ -36,7 +50,7 @@ export class WorldGenerator {
         let resource: ResourceType | null = null;
         let resourceAmount: number | null = null;
 
-        if (type === "land" && Math.random() < 0.15) {
+        if (type === "land" && resourceSpawnValue > 0.7) {
           if (resourceValue > 0.6) {
             resource = "iron";
           } else if (resourceValue > 0.3) {
@@ -48,7 +62,7 @@ export class WorldGenerator {
           } else {
             resource = "wood";
           }
-          resourceAmount = Math.floor(Math.random() * 50) + 50;
+          resourceAmount = Math.floor((resourceAmountValue + 1) * 25) + 50;
         }
 
         row.push({

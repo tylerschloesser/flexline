@@ -44,6 +44,7 @@ export const GameStateSchema = z.object({
   cameraX: z.number(),
   cameraY: z.number(),
   cameraZoom: z.number(),
+  worldSeed: z.string(),
 });
 export type GameState = z.infer<typeof GameStateSchema>;
 
