@@ -539,37 +539,29 @@ export class GameRenderer {
 
     if (entityType === "furnace") {
       // Draw a 2x2 furnace
-      graphics.beginFill(0x8b4513); // Brown color for furnace
-      graphics.drawRect(0, 0, 2 * TILE_SIZE, 2 * TILE_SIZE);
-      graphics.endFill();
+      graphics.rect(0, 0, 2 * TILE_SIZE, 2 * TILE_SIZE).fill(0x8b4513); // Brown color for furnace
 
       // Add some detail - chimney
-      graphics.beginFill(0x654321);
-      graphics.drawRect(
+      graphics.rect(
         TILE_SIZE * 0.7,
         TILE_SIZE * 0.2,
         TILE_SIZE * 0.6,
         TILE_SIZE * 0.4,
-      );
-      graphics.endFill();
+      ).fill(0x654321);
 
       // Add fire opening
-      graphics.beginFill(0x000000);
-      graphics.drawRect(
+      graphics.rect(
         TILE_SIZE * 0.3,
         TILE_SIZE * 1.2,
         TILE_SIZE * 0.4,
         TILE_SIZE * 0.3,
-      );
-      graphics.endFill();
-      graphics.beginFill(0xff4500);
-      graphics.drawRect(
+      ).fill(0x000000);
+      graphics.rect(
         TILE_SIZE * 0.35,
         TILE_SIZE * 1.25,
         TILE_SIZE * 0.3,
         TILE_SIZE * 0.2,
-      );
-      graphics.endFill();
+      ).fill(0xff4500);
     }
 
     // Position the graphics relative to center
