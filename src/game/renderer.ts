@@ -181,9 +181,9 @@ export class GameRenderer {
       }
     });
 
-    this.viewport.on("clicked", (event: PIXI.FederatedPointerEvent) => {
+    this.viewport.on("clicked", (event) => {
       if (!this.viewport) return;
-      const worldPoint = this.viewport.toWorld(event.data.global);
+      const worldPoint = this.viewport.toWorld(event.screen);
       this.handleClick(worldPoint.x, worldPoint.y);
     });
 
