@@ -45,7 +45,14 @@ export class GameRenderer {
     this.viewport.drag().pinch().wheel().decelerate();
 
     const state = this.gameState.getState();
-    this.viewport.moveCenter(state.cameraX, state.cameraY);
+    // Convert tile coordinates (1x1 units) back to world pixel coordinates for viewport
+    const worldPixelX = state.cameraX * TILE_SIZE;
+    const worldPixelY = state.cameraY * TILE_SIZE;
+    console.log("Restoring camera position:", {
+      tileX: state.cameraX, tileY: state.cameraY,
+      worldPixelX, worldPixelY, zoom: state.cameraZoom
+    });
+    this.viewport.moveCenter(worldPixelX, worldPixelY);
     this.viewport.setZoom(state.cameraZoom);
 
     this.viewport.on("moved", () => {
@@ -79,9 +86,10 @@ export class GameRenderer {
     this.updateVisibleChunks();
   }
 
-  private handleClick(worldX: number, worldY: number): void {
-    const tileX = Math.floor(worldX / TILE_SIZE);
-    const tileY = Math.floor(worldY / TILE_SIZE);
+  private handleClick(worldPixelX: number, worldPixelY: number): void {
+    // Convert world pixel coordinates to tile coordinates (1x1 units)
+    const tileX = Math.floor(worldPixelX / TILE_SIZE);
+    const tileY = Math.floor(worldPixelY / TILE_SIZE);
     this.gameState.mineResource(tileX, tileY);
   }
 
@@ -119,7 +127,9 @@ export class GameRenderer {
         const [chunkX, chunkY] = key.split(",").map(Number);
         for (let y = 0; y < CHUNK_SIZE; y++) {
           for (let x = 0; x < CHUNK_SIZE; x++) {
-            const resourceKey = `${chunkX * CHUNK_SIZE + x},${chunkY * CHUNK_SIZE + y}`;
+            const tileX = chunkX * CHUNK_SIZE + x;
+            const tileY = chunkY * CHUNK_SIZE + y;
+            const resourceKey = `${tileX},${tileY}`;
             const resourceSprite = this.resourceSprites.get(resourceKey);
             if (resourceSprite) {
               resourceSprite.destroy();
@@ -174,9 +184,9 @@ export class GameRenderer {
             resourceSprite.cursor = "pointer";
             container.addChild(resourceSprite);
 
-            const worldX = chunkX * CHUNK_SIZE + x;
-            const worldY = chunkY * CHUNK_SIZE + y;
-            this.resourceSprites.set(`${worldX},${worldY}`, resourceSprite);
+            const tileX = chunkX * CHUNK_SIZE + x;
+            const tileY = chunkY * CHUNK_SIZE + y;
+            this.resourceSprites.set(`${tileX},${tileY}`, resourceSprite);
           }
         }
       }

@@ -25,17 +25,17 @@ export class WorldGenerator {
     for (let y = 0; y < CHUNK_SIZE; y++) {
       const row: Tile[] = [];
       for (let x = 0; x < CHUNK_SIZE; x++) {
-        const worldX = chunkX * CHUNK_SIZE + x;
-        const worldY = chunkY * CHUNK_SIZE + y;
+        const tileX = chunkX * CHUNK_SIZE + x;
+        const tileY = chunkY * CHUNK_SIZE + y;
 
-        const terrainValue = this.terrainNoise(worldX * 0.015, worldY * 0.015);
+        const terrainValue = this.terrainNoise(tileX * 0.015, tileY * 0.015);
         const elevationValue = this.elevationNoise(
-          worldX * 0.025,
-          worldY * 0.025,
+          tileX * 0.025,
+          tileY * 0.025,
         );
-        const resourceValue = this.resourceNoise(worldX * 0.05, worldY * 0.05);
-        const resourceSpawnValue = this.resourceSpawnNoise(worldX * 0.1, worldY * 0.1);
-        const resourceAmountValue = this.resourceAmountNoise(worldX * 0.08, worldY * 0.08);
+        const resourceValue = this.resourceNoise(tileX * 0.05, tileY * 0.05);
+        const resourceSpawnValue = this.resourceSpawnNoise(tileX * 0.1, tileY * 0.1);
+        const resourceAmountValue = this.resourceAmountNoise(tileX * 0.08, tileY * 0.08);
 
         const type = terrainValue > -0.1 ? "land" : "water";
         const elevation =
@@ -87,12 +87,12 @@ export class WorldGenerator {
   }
 
   getChunkCoordinates(
-    worldX: number,
-    worldY: number,
+    tileX: number,
+    tileY: number,
   ): { chunkX: number; chunkY: number } {
     return {
-      chunkX: Math.floor(worldX / CHUNK_SIZE),
-      chunkY: Math.floor(worldY / CHUNK_SIZE),
+      chunkX: Math.floor(tileX / CHUNK_SIZE),
+      chunkY: Math.floor(tileY / CHUNK_SIZE),
     };
   }
 }

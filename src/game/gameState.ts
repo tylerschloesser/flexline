@@ -1,5 +1,6 @@
 import type { GameState, Chunk, Inventory, ResourceType } from "./schemas";
 import { WorldGenerator } from "./worldGenerator";
+import { TILE_SIZE, CHUNK_SIZE } from "./schemas";
 
 export class GameStateManager {
   private state: GameState;
@@ -72,21 +73,21 @@ export class GameStateManager {
     return this.state.chunks.get(key)!;
   }
 
-  mineResource(worldX: number, worldY: number): boolean {
+  mineResource(tileX: number, tileY: number): boolean {
     const { chunkX, chunkY } = this.worldGenerator.getChunkCoordinates(
-      worldX,
-      worldY,
+      tileX,
+      tileY,
     );
     const chunk = this.getOrGenerateChunk(chunkX, chunkY);
 
-    const tileX = Math.floor(worldX) - chunkX * 32;
-    const tileY = Math.floor(worldY) - chunkY * 32;
+    const localTileX = Math.floor(tileX) - chunkX * CHUNK_SIZE;
+    const localTileY = Math.floor(tileY) - chunkY * CHUNK_SIZE;
 
-    if (tileX < 0 || tileX >= 32 || tileY < 0 || tileY >= 32) {
+    if (localTileX < 0 || localTileX >= CHUNK_SIZE || localTileY < 0 || localTileY >= CHUNK_SIZE) {
       return false;
     }
 
-    const tile = chunk.tiles[tileY][tileX];
+    const tile = chunk.tiles[localTileY][localTileX];
 
     if (tile.resource && tile.resourceAmount) {
       this.state.inventory[tile.resource] += 1;
@@ -139,9 +140,10 @@ export class GameStateManager {
     return recipes[recipe] || null;
   }
 
-  updateCamera(x: number, y: number, zoom: number): void {
-    this.state.cameraX = x;
-    this.state.cameraY = y;
+  updateCamera(worldPixelX: number, worldPixelY: number, zoom: number): void {
+    // Convert world pixel coordinates to tile coordinates (1x1 unit tiles)
+    this.state.cameraX = worldPixelX / TILE_SIZE;
+    this.state.cameraY = worldPixelY / TILE_SIZE;
     this.state.cameraZoom = zoom;
     this.notify();
   }
@@ -172,6 +174,7 @@ export class GameStateManager {
     };
 
     try {
+      console.log("Saving state:", essentialState);
       localStorage.setItem("gameState", JSON.stringify(essentialState));
     } catch (e) {
       console.error("Failed to save state:", e);
@@ -188,9 +191,13 @@ export class GameStateManager {
   private loadState(): GameState | null {
     try {
       const saved = localStorage.getItem("gameState");
-      if (!saved) return null;
+      if (!saved) {
+        console.log("No saved game state found");
+        return null;
+      }
 
       const parsed = JSON.parse(saved);
+      console.log("Loading saved state:", parsed);
 
       // Merge saved essential state with default state structure
       const state = {
