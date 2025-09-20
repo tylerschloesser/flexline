@@ -15,7 +15,7 @@ export class GameStateManager {
   private state: GameState;
   private worldGenerator: WorldGenerator;
   private listeners: Set<() => void> = new Set();
-  private saveTimeout: NodeJS.Timeout | null = null;
+  private saveTimeout: ReturnType<typeof setTimeout> | null = null;
   private chunkGenerationPromises = new Map<string, Promise<Chunk>>();
 
   constructor() {
