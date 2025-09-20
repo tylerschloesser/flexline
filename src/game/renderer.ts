@@ -216,6 +216,11 @@ export class GameRenderer {
       this.updatePlacementPreview();
     });
 
+    // Clear placement preview when pointer leaves the viewport
+    this.viewport.on("pointerleave", () => {
+      this.clearPlacementPreview();
+    });
+
     // Initialize input manager and camera movement
     this.initializeCameraControls();
 
@@ -511,15 +516,19 @@ export class GameRenderer {
     this.mousePosition.y = worldPoint.y;
   }
 
-  private updatePlacementPreview(): void {
-    if (!this.viewport) return;
-
-    // Clear existing preview
+  private clearPlacementPreview(): void {
     if (this.placementPreview) {
       this.entityContainer.removeChild(this.placementPreview);
       this.placementPreview.destroy();
       this.placementPreview = null;
     }
+  }
+
+  private updatePlacementPreview(): void {
+    if (!this.viewport) return;
+
+    // Clear existing preview
+    this.clearPlacementPreview();
 
     const selectedItem = this.gameState.getSelectedCraftingItem();
     if (!selectedItem) return;
