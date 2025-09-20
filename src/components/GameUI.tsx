@@ -114,6 +114,7 @@ export const GameUI = memo(function GameUI({
         p="md"
         withBorder
         shadow="md"
+        visibleFrom="sm"
       >
         <Text size="lg" fw={600} mb="sm">
           Inventory
@@ -168,6 +169,7 @@ export const GameUI = memo(function GameUI({
         p="md"
         withBorder
         shadow="md"
+        visibleFrom="sm"
       >
         <Text size="lg" fw={600} mb="sm">
           Crafting
@@ -222,6 +224,7 @@ export const GameUI = memo(function GameUI({
         p="md"
         withBorder
         shadow="md"
+        visibleFrom="sm"
       >
         <Text size="lg" fw={600} mb="sm">
           Controls
@@ -268,6 +271,7 @@ export const GameUI = memo(function GameUI({
             p="md"
             withBorder
             shadow="md"
+            visibleFrom="sm"
           >
             <Text size="lg" fw={600} mb="sm" tt="capitalize">
               {hoveredEntity.type} Inventory
