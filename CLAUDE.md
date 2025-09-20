@@ -4,6 +4,35 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Always use `bun` instead of `npm`
 
+## Game Description
+
+**Fluxline** is a 2D resource management and crafting game built with React, TypeScript, and canvas rendering. The game features:
+
+### Core Gameplay
+- **Resource Mining**: Click on resources (iron, copper, coal, wood, stone) scattered across a procedurally generated world to mine them
+- **Crafting System**: Use collected resources to craft items (currently furnaces requiring 5 stone)
+- **Building Placement**: Select crafted items and place them in the world by clicking
+- **Inventory Management**: Track collected resources and crafted items
+
+### World & Navigation
+- **Infinite Procedural World**: Chunk-based world generation with varied terrain and resource distribution
+- **Free Camera Movement**: Pan with mouse drag, zoom with scroll wheel, or use WASD keys for movement
+- **Persistent State**: Game state is automatically saved and restored between sessions
+
+### Technical Features
+- Canvas-based rendering with efficient chunk loading
+- Real-time UI updates with React state management
+- Mantine UI component library for clean interface design
+- TypeScript with Zod schemas for type safety and validation
+
+### Current Game Loop
+1. Explore the world to find resources
+2. Mine resources by clicking on them
+3. Craft items using collected resources
+4. Place crafted items in the world to expand your base
+
+The game currently focuses on the foundational mechanics of resource gathering, crafting, and placement, with furnaces as the primary craftable item.
+
 ## Commands
 
 ### Development
