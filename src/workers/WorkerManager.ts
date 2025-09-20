@@ -7,6 +7,7 @@ import type {
   TextureVariant,
 } from "./workerTypes";
 import type { Chunk } from "../game/schemas";
+import invariant from "tiny-invariant";
 
 export class WorkerManager {
   private chunkWorkers: Worker[] = [];
@@ -86,6 +87,10 @@ export class WorkerManager {
       if (error) {
         request.reject(new Error(error));
       } else {
+        invariant(
+          chunk,
+          `Chunk worker returned no chunk data for request ${id}`,
+        );
         request.resolve(chunk);
       }
     }
@@ -103,11 +108,12 @@ export class WorkerManager {
 
     if (request) {
       this.pendingTextureRequests.delete(id);
-      if (error || !imageBitmap) {
-        request.reject(new Error(error || "Failed to create texture"));
-      } else {
-        request.resolve(imageBitmap);
-      }
+      invariant(!error, `Texture worker error for request ${id}: ${error}`);
+      invariant(
+        imageBitmap,
+        `Texture worker returned no bitmap for request ${id}`,
+      );
+      request.resolve(imageBitmap);
     }
   }
 
@@ -241,12 +247,8 @@ export class WorkerManager {
       });
     });
 
-    try {
-      await Promise.all(promises);
-      console.log("Texture pregeneration completed");
-    } catch (error) {
-      console.error("Texture pregeneration failed:", error);
-    }
+    await Promise.all(promises);
+    console.log("Texture pregeneration completed");
   }
 
   destroy(): void {
