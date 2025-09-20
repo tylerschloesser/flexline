@@ -1,5 +1,6 @@
 import * as PIXI from "pixi.js";
 import { Viewport } from "pixi-viewport";
+import invariant from "tiny-invariant";
 import { GameStateManager } from "./gameState";
 import { WorkerManager } from "../workers/WorkerManager";
 import { InputManager } from "./inputManager";
@@ -10,6 +11,7 @@ import {
   ZOOM_CONFIG,
   ENTITY_DEFINITIONS,
 } from "./schemas";
+import type { Entity } from "./schemas";
 import {
   CAMERA_MOVE_SPEED,
   MIN_FRAME_TIME,
@@ -41,6 +43,8 @@ export class GameRenderer {
   private lastMouseScreenPosition = { x: 0, y: 0 };
   private placementPreview: PIXI.Container | null = null;
   private entityContainer!: PIXI.Container;
+  private hoveredEntity: Entity | null = null;
+  private hoverListeners: Set<(entity: Entity | null) => void> = new Set();
 
   constructor(canvas: HTMLCanvasElement, gameState: GameStateManager) {
     this.canvas = canvas;
@@ -66,13 +70,12 @@ export class GameRenderer {
     const minZoom = minTileSize / TILE_SIZE;
 
     // Error if the viewport makes this impossible (minZoom > maxZoom)
-    if (minZoom > maxZoom) {
-      throw new Error(
-        `Viewport dimensions (${viewportWidth}x${viewportHeight}) make zoom configuration impossible. ` +
-          `Min zoom (${minZoom.toFixed(3)}) > Max zoom (${maxZoom.toFixed(3)}). ` +
-          `Consider adjusting ZOOM_CONFIG values.`,
-      );
-    }
+    invariant(
+      minZoom <= maxZoom,
+      `Viewport dimensions (${viewportWidth}x${viewportHeight}) make zoom configuration impossible. ` +
+        `Min zoom (${minZoom.toFixed(3)}) > Max zoom (${maxZoom.toFixed(3)}). ` +
+        `Consider adjusting ZOOM_CONFIG values.`,
+    );
 
     return { minZoom, maxZoom };
   }
@@ -206,7 +209,7 @@ export class GameRenderer {
       this.handleClick(worldPoint.x, worldPoint.y);
     });
 
-    // Track mouse movement for placement preview
+    // Track mouse movement for placement preview and entity hover
     this.viewport.on("pointermove", (event) => {
       if (!this.viewport) return;
       // Store screen position for WASD camera movement updates
@@ -217,11 +220,13 @@ export class GameRenderer {
       this.mousePosition.x = worldPoint.x;
       this.mousePosition.y = worldPoint.y;
       this.updatePlacementPreview();
+      this.updateHoveredEntity();
     });
 
-    // Clear placement preview when pointer leaves the viewport
+    // Clear placement preview and hover when pointer leaves the viewport
     this.viewport.on("pointerleave", () => {
       this.clearPlacementPreview();
+      this.setHoveredEntity(null);
     });
 
     // Initialize input manager and camera movement
@@ -242,11 +247,14 @@ export class GameRenderer {
   }
 
   private handleClick(worldPixelX: number, worldPixelY: number): void {
-    const selectedItem = this.gameState.getSelectedCraftingItem();
+    const selectedItem = this.gameState.getSelectedItem();
+    const tileX = Math.floor(worldPixelX / TILE_SIZE);
+    const tileY = Math.floor(worldPixelY / TILE_SIZE);
 
-    if (selectedItem) {
-      // Get entity definition to calculate proper center
-      const definition = ENTITY_DEFINITIONS[selectedItem];
+    if (selectedItem?.type === "crafted") {
+      // Placing a crafted entity
+      const entityType = selectedItem.itemId;
+      const definition = ENTITY_DEFINITIONS[entityType];
       const { width, height } = definition;
 
       // Convert click position (world pixels) to tile coordinates, treating click as entity center
@@ -265,19 +273,31 @@ export class GameRenderer {
           : Math.round(clickTileY - 0.5) + 0.5;
 
       // Try to place entity
-      const success = this.gameState.placeEntity(
-        selectedItem,
-        centerX,
-        centerY,
-      );
+      const success = this.gameState.placeEntity(entityType, centerX, centerY);
       if (success) {
         this.renderEntities();
       }
+    } else if (selectedItem?.type === "inventory") {
+      // Inserting inventory item into entity
+      const resourceType = selectedItem.itemId;
+      const entity = this.gameState.getEntityAt(tileX, tileY);
+
+      if (entity) {
+        const success = this.gameState.insertItemIntoEntity(
+          entity.id,
+          resourceType,
+          1,
+        );
+        if (success) {
+          // Auto-deselect if we have no more of this item
+          const inventory = this.gameState.getInventory();
+          if (inventory[resourceType] <= 0) {
+            this.gameState.setSelectedItem(null);
+          }
+        }
+      }
     } else {
-      // Mine resource (resources are infinite, no chunk regeneration needed)
-      // Convert world pixel coordinates to tile coordinates for mining
-      const tileX = Math.floor(worldPixelX / TILE_SIZE);
-      const tileY = Math.floor(worldPixelY / TILE_SIZE);
+      // No item selected - mine resource
       this.gameState.mineResource(tileX, tileY);
     }
   }
@@ -509,6 +529,7 @@ export class GameRenderer {
         // Update world mouse position and placement preview after camera movement
         this.updateMouseWorldPosition();
         this.updatePlacementPreview();
+        this.updateHoveredEntity();
       }
 
       requestAnimationFrame(updateCamera);
@@ -542,52 +563,55 @@ export class GameRenderer {
     // Clear existing preview
     this.clearPlacementPreview();
 
-    const selectedItem = this.gameState.getSelectedCraftingItem();
+    const selectedItem = this.gameState.getSelectedItem();
     if (!selectedItem) return;
 
-    // Get entity definition to calculate proper center
-    const definition = ENTITY_DEFINITIONS[selectedItem];
-    const { width, height } = definition;
+    if (selectedItem.type === "crafted") {
+      // Entity placement preview
+      const entityType = selectedItem.itemId;
+      const definition = ENTITY_DEFINITIONS[entityType];
+      const { width, height } = definition;
 
-    // Use current mouse position in world coordinates
-    // This is updated by pointermove events and stays current
-    const mouseTileX = this.mousePosition.x / TILE_SIZE;
-    const mouseTileY = this.mousePosition.y / TILE_SIZE;
+      // Use current mouse position in world coordinates
+      const mouseTileX = this.mousePosition.x / TILE_SIZE;
+      const mouseTileY = this.mousePosition.y / TILE_SIZE;
 
-    // For even-sized entities, round to nearest integer (grid intersections)
-    // For odd-sized entities, round to nearest half-integer (tile centers)
-    const centerX =
-      width % 2 === 0
-        ? Math.round(mouseTileX)
-        : Math.round(mouseTileX - 0.5) + 0.5;
-    const centerY =
-      height % 2 === 0
-        ? Math.round(mouseTileY)
-        : Math.round(mouseTileY - 0.5) + 0.5;
+      // For even-sized entities, round to nearest integer (grid intersections)
+      // For odd-sized entities, round to nearest half-integer (tile centers)
+      const centerX =
+        width % 2 === 0
+          ? Math.round(mouseTileX)
+          : Math.round(mouseTileX - 0.5) + 0.5;
+      const centerY =
+        height % 2 === 0
+          ? Math.round(mouseTileY)
+          : Math.round(mouseTileY - 0.5) + 0.5;
 
-    // Check if placement is valid
-    const canPlace = this.gameState.canPlaceEntity(
-      selectedItem,
-      centerX,
-      centerY,
-    );
+      // Check if placement is valid
+      const canPlace = this.gameState.canPlaceEntity(
+        entityType,
+        centerX,
+        centerY,
+      );
 
-    // Create preview
-    this.placementPreview = this.createEntitySprite(
-      selectedItem,
-      centerX,
-      centerY,
-    );
-    this.placementPreview.alpha = 0.6;
+      // Create preview
+      this.placementPreview = this.createEntitySprite(
+        entityType,
+        centerX,
+        centerY,
+      );
+      this.placementPreview.alpha = 0.6;
 
-    // Apply color tint based on validity
-    if (canPlace) {
-      this.placementPreview.tint = 0x00ff00; // Green tint for valid placement
-    } else {
-      this.placementPreview.tint = 0xff0000; // Red tint for invalid placement
+      // Apply color tint based on validity
+      if (canPlace) {
+        this.placementPreview.tint = 0x00ff00; // Green tint for valid placement
+      } else {
+        this.placementPreview.tint = 0xff0000; // Red tint for invalid placement
+      }
+
+      this.entityContainer.addChild(this.placementPreview);
     }
-
-    this.entityContainer.addChild(this.placementPreview);
+    // Note: For inventory items, we don't show a placement preview since they're inserted into entities on hover
   }
 
   private renderEntities(): void {
@@ -627,9 +651,35 @@ export class GameRenderer {
     return container;
   }
 
+  private updateHoveredEntity(): void {
+    const tileX = Math.floor(this.mousePosition.x / TILE_SIZE);
+    const tileY = Math.floor(this.mousePosition.y / TILE_SIZE);
+    const entity = this.gameState.getEntityAt(tileX, tileY);
+    this.setHoveredEntity(entity);
+  }
+
+  private setHoveredEntity(entity: Entity | null): void {
+    if (this.hoveredEntity !== entity) {
+      this.hoveredEntity = entity;
+      this.notifyHoverListeners(entity);
+    }
+  }
+
+  private notifyHoverListeners(entity: Entity | null): void {
+    this.hoverListeners.forEach((listener) => listener(entity));
+  }
+
+  onEntityHover(callback: (entity: Entity | null) => void): () => void {
+    this.hoverListeners.add(callback);
+    return () => {
+      this.hoverListeners.delete(callback);
+    };
+  }
+
   destroy(): void {
     this.inputManager.destroy();
     this.workerManager.destroy();
+    this.hoverListeners.clear();
     if (this.app) {
       this.app.destroy(true);
     }

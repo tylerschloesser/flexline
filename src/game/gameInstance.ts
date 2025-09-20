@@ -1,3 +1,4 @@
+import invariant from "tiny-invariant";
 import { GameStateManager } from "./gameState";
 import { GameRenderer } from "./renderer";
 
@@ -19,9 +20,7 @@ export class GameInstance {
 
   async initialize(): Promise<void> {
     const canvas = document.getElementById("game-canvas") as HTMLCanvasElement;
-    if (!canvas) {
-      throw new Error("Canvas element #game-canvas not found");
-    }
+    invariant(canvas, "Canvas element #game-canvas not found");
 
     this.renderer = new GameRenderer(canvas, this.gameState);
     await this.renderer.initialize();
@@ -31,27 +30,16 @@ export class GameInstance {
     return this.gameState;
   }
 
-  getRenderer(): GameRenderer | null {
+  getRenderer(): GameRenderer {
+    invariant(
+      this.renderer,
+      "Game must be initialized before accessing renderer",
+    );
     return this.renderer;
   }
-}
 
-// Initialize the game when the DOM is ready
-if (typeof window !== "undefined") {
-  const initGame = async () => {
-    try {
-      const game = GameInstance.getInstance();
-      await game.initialize();
-      console.log("Game initialized successfully");
-    } catch (error) {
-      console.error("Failed to initialize game:", error);
-    }
-  };
-
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", initGame);
-  } else {
-    initGame();
+  isInitialized(): boolean {
+    return this.renderer !== null;
   }
 }
 

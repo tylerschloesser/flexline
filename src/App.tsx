@@ -1,17 +1,14 @@
-import { useEffect, useState } from "react";
-import { game } from "./game/gameInstance";
+import { GameStateManager } from "./game/gameState";
+import { GameRenderer } from "./game/renderer";
 import { GameUI } from "./components/GameUI";
 
-function App() {
-  const [gameState, setGameState] = useState(game.getGameState());
+interface AppProps {
+  gameState: GameStateManager;
+  renderer: GameRenderer;
+}
 
-  useEffect(() => {
-    // Game is already initialized in gameInstance.ts
-    // Just set up the state for React components
-    setGameState(game.getGameState());
-  }, []);
-
-  return <>{gameState && <GameUI gameState={gameState} />}</>;
+function App({ gameState, renderer }: AppProps) {
+  return <GameUI gameState={gameState} renderer={renderer} />;
 }
 
 export default App;

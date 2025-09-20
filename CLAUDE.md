@@ -73,6 +73,26 @@ This is a React + TypeScript + Vite application using:
 
 The application follows a standard Vite React template structure with the main entry point at `src/main.tsx` rendering the `App` component.
 
+## Code Style Guidelines
+
+### Error Handling
+
+**Use `invariant` instead of `if/throw` patterns:**
+
+```typescript
+// ❌ Don't do this
+if (!renderer) {
+  throw new Error("Game must be initialized before accessing renderer");
+}
+
+// ✅ Do this instead
+import invariant from "tiny-invariant";
+
+invariant(renderer, "Game must be initialized before accessing renderer");
+```
+
+The `tiny-invariant` package provides better ergonomics and is already included in the project dependencies.
+
 ## important-instruction-reminders
 
 Do what has been asked; nothing more, nothing less.

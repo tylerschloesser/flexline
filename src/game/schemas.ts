@@ -47,8 +47,25 @@ export const EntitySchema = z.object({
   y: z.number(),
   width: z.number(),
   height: z.number(),
+  inventory: InventorySchema.optional(),
 });
 export type Entity = z.infer<typeof EntitySchema>;
+
+export const SelectedCraftedItemSchema = z.object({
+  type: z.literal("crafted"),
+  itemId: EntityTypeSchema,
+});
+
+export const SelectedInventoryItemSchema = z.object({
+  type: z.literal("inventory"),
+  itemId: ResourceTypeSchema,
+});
+
+export const SelectedItemSchema = z.discriminatedUnion("type", [
+  SelectedCraftedItemSchema,
+  SelectedInventoryItemSchema,
+]);
+export type SelectedItem = z.infer<typeof SelectedItemSchema>;
 
 export const GameStateSchema = z.object({
   chunks: z.map(z.string(), ChunkSchema),
@@ -59,7 +76,7 @@ export const GameStateSchema = z.object({
   cameraZoom: z.number(),
   worldSeed: z.string(),
   entities: z.map(z.string(), EntitySchema),
-  selectedCraftingItem: EntityTypeSchema.nullable(),
+  selectedItem: SelectedItemSchema.nullable(),
 });
 export type GameState = z.infer<typeof GameStateSchema>;
 
