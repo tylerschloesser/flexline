@@ -1,29 +1,27 @@
 import * as PIXI from "pixi.js";
 import { Viewport } from "pixi-viewport";
 import { GameStateManager } from "./gameState";
-import { WorkerManager } from "../workers/WorkerManager";
 import { TILE_SIZE, CHUNK_SIZE } from "./schemas";
+import type { Chunk } from "./schemas";
 
 export class GameRenderer {
   private app: PIXI.Application | null = null;
   private viewport: Viewport | null = null;
   private gameState: GameStateManager;
-  private workerManager: WorkerManager;
   private chunkContainers: Map<string, PIXI.Container> = new Map();
-  private resourceSprites: Map<string, PIXI.Sprite> = new Map();
-  private textureCache: Map<string, PIXI.Texture[]> = new Map();
-  private resourceTextureCache: Map<string, PIXI.Texture> = new Map();
+  private chunkTextures: Map<string, PIXI.Texture> = new Map();
   private placeholderTexture: PIXI.Texture | null = null;
   private canvas: HTMLCanvasElement;
   private pendingChunks = new Set<string>();
+  private lastVisibleBounds: { left: number; right: number; top: number; bottom: number } | null = null;
 
   constructor(canvas: HTMLCanvasElement, gameState: GameStateManager) {
     this.canvas = canvas;
     this.gameState = gameState;
-    this.workerManager = new WorkerManager();
   }
 
   async initialize(): Promise<void> {
+    console.log('GameRenderer: Starting initialization');
     // Initialize PIXI Application using the constructor
     this.app = new PIXI.Application();
     await this.app.init({
@@ -34,6 +32,7 @@ export class GameRenderer {
       resolution: window.devicePixelRatio || 1,
       autoDensity: true,
     });
+    console.log('GameRenderer: PIXI app initialized');
 
     // Initialize viewport
     this.viewport = new Viewport({
@@ -56,8 +55,10 @@ export class GameRenderer {
       tileX: state.cameraX, tileY: state.cameraY,
       worldPixelX, worldPixelY, zoom: state.cameraZoom
     });
-    this.viewport.moveCenter(worldPixelX, worldPixelY);
-    this.viewport.setZoom(state.cameraZoom);
+
+    // Set initial view to center of world
+    this.viewport.moveCenter(0, 0);
+    this.viewport.setZoom(1);
 
     this.viewport.on("moved", () => {
       if (!this.viewport) return;
@@ -86,15 +87,21 @@ export class GameRenderer {
     });
 
     // Create placeholder texture and initialize textures
+    console.log('GameRenderer: Creating placeholder texture');
     this.createPlaceholderTexture();
+    console.log('GameRenderer: Initializing textures');
     await this.initializeTextures();
+    console.log('GameRenderer: Updating visible chunks');
     this.updateVisibleChunks();
+    console.log('GameRenderer: Initialization complete');
   }
 
   private handleClick(worldPixelX: number, worldPixelY: number): void {
     // Convert world pixel coordinates to tile coordinates (1x1 units)
     const tileX = Math.floor(worldPixelX / TILE_SIZE);
     const tileY = Math.floor(worldPixelY / TILE_SIZE);
+
+    // Mine resource (resources are infinite, no chunk regeneration needed)
     this.gameState.mineResource(tileX, tileY);
   }
 
@@ -103,6 +110,17 @@ export class GameRenderer {
 
     const bounds = this.viewport.getVisibleBounds();
 
+    // Skip if bounds haven't changed significantly
+    if (this.lastVisibleBounds &&
+        Math.abs(bounds.left - this.lastVisibleBounds.left) < CHUNK_SIZE * TILE_SIZE / 2 &&
+        Math.abs(bounds.right - this.lastVisibleBounds.right) < CHUNK_SIZE * TILE_SIZE / 2 &&
+        Math.abs(bounds.top - this.lastVisibleBounds.top) < CHUNK_SIZE * TILE_SIZE / 2 &&
+        Math.abs(bounds.bottom - this.lastVisibleBounds.bottom) < CHUNK_SIZE * TILE_SIZE / 2) {
+      return;
+    }
+
+    this.lastVisibleBounds = { left: bounds.left, right: bounds.right, top: bounds.top, bottom: bounds.bottom };
+
     const startChunkX = Math.floor(bounds.left / (CHUNK_SIZE * TILE_SIZE));
     const endChunkX = Math.ceil(bounds.right / (CHUNK_SIZE * TILE_SIZE));
     const startChunkY = Math.floor(bounds.top / (CHUNK_SIZE * TILE_SIZE));
@@ -110,132 +128,103 @@ export class GameRenderer {
 
     const visibleChunks = new Set<string>();
 
+    // Add visible chunks
     for (let chunkX = startChunkX; chunkX <= endChunkX; chunkX++) {
       for (let chunkY = startChunkY; chunkY <= endChunkY; chunkY++) {
         const key = `${chunkX},${chunkY}`;
         visibleChunks.add(key);
 
         if (!this.chunkContainers.has(key) && !this.pendingChunks.has(key)) {
+          console.log(`Rendering chunk ${chunkX},${chunkY}`);
           this.renderChunkAsync(chunkX, chunkY);
         }
       }
     }
 
-    this.chunkContainers.forEach((container, key) => {
+    // Remove chunks that are no longer visible (simplified cleanup)
+    for (const [key, container] of this.chunkContainers) {
       if (!visibleChunks.has(key)) {
-        if (this.viewport) {
-          this.viewport.removeChild(container);
-        }
+        this.viewport.removeChild(container);
         container.destroy({ children: true });
         this.chunkContainers.delete(key);
-
-        const [chunkX, chunkY] = key.split(",").map(Number);
-        for (let y = 0; y < CHUNK_SIZE; y++) {
-          for (let x = 0; x < CHUNK_SIZE; x++) {
-            const tileX = chunkX * CHUNK_SIZE + x;
-            const tileY = chunkY * CHUNK_SIZE + y;
-            const resourceKey = `${tileX},${tileY}`;
-            const resourceSprite = this.resourceSprites.get(resourceKey);
-            if (resourceSprite) {
-              resourceSprite.destroy();
-              this.resourceSprites.delete(resourceKey);
-            }
-          }
-        }
+        this.chunkTextures.delete(key);
       }
-    });
+    }
   }
 
   private renderPlaceholderChunk(chunkX: number, chunkY: number): void {
     if (!this.viewport || !this.placeholderTexture) return;
 
-    const container = new PIXI.Container();
-    container.position.set(
+    const key = `${chunkX},${chunkY}`;
+
+    // Don't render placeholder if chunk already exists
+    if (this.chunkContainers.has(key)) return;
+
+    const sprite = new PIXI.Sprite(this.placeholderTexture);
+    sprite.position.set(
       chunkX * CHUNK_SIZE * TILE_SIZE,
       chunkY * CHUNK_SIZE * TILE_SIZE,
     );
+    sprite.width = CHUNK_SIZE * TILE_SIZE;
+    sprite.height = CHUNK_SIZE * TILE_SIZE;
+    sprite.alpha = 0.3;
 
-    for (let y = 0; y < CHUNK_SIZE; y++) {
-      for (let x = 0; x < CHUNK_SIZE; x++) {
-        const sprite = new PIXI.Sprite(this.placeholderTexture);
-        sprite.position.set(x * TILE_SIZE, y * TILE_SIZE);
-        sprite.alpha = 0.3;
-        container.addChild(sprite);
-      }
-    }
-
-    this.viewport.addChild(container);
-    this.chunkContainers.set(`${chunkX},${chunkY}`, container);
+    this.viewport.addChild(sprite);
+    this.chunkContainers.set(key, sprite);
   }
 
   private async renderChunkAsync(chunkX: number, chunkY: number): Promise<void> {
     if (!this.viewport) return;
 
     const key = `${chunkX},${chunkY}`;
+
+    // Early exit if chunk is already fully rendered
+    if (this.chunkContainers.has(key) && this.chunkTextures.has(key)) {
+      return;
+    }
+
+    // Skip if already generating this chunk
+    if (this.pendingChunks.has(key)) {
+      return;
+    }
+
     this.pendingChunks.add(key);
 
-    this.renderPlaceholderChunk(chunkX, chunkY);
-
     try {
-      const chunk = await this.gameState.getOrGenerateChunkAsync(chunkX, chunkY);
+      // Check if we already have a generated texture for this chunk
+      let chunkTexture = this.chunkTextures.get(key);
 
-      if (this.chunkContainers.has(key)) {
-        const oldContainer = this.chunkContainers.get(key)!;
-        if (this.viewport) {
-          this.viewport.removeChild(oldContainer);
+      if (!chunkTexture) {
+        console.log(`Generating texture for chunk ${chunkX},${chunkY}`);
+        // Only render placeholder if we don't have container yet
+        if (!this.chunkContainers.has(key)) {
+          this.renderPlaceholderChunk(chunkX, chunkY);
         }
-        oldContainer.destroy({ children: true });
+
+        const chunk = await this.gameState.getOrGenerateChunkAsync(chunkX, chunkY);
+        console.log(`Got chunk data for ${chunkX},${chunkY}:`, chunk.tiles.length);
+        chunkTexture = this.generateChunkTexture(chunk);
+        console.log(`Generated texture for chunk ${chunkX},${chunkY}`);
+        this.chunkTextures.set(key, chunkTexture);
       }
 
-      const container = new PIXI.Container();
-      container.position.set(
+      // Replace placeholder with real chunk texture
+      const existingSprite = this.chunkContainers.get(key);
+      if (existingSprite) {
+        console.log(`Replacing placeholder for chunk ${chunkX},${chunkY}`);
+        this.viewport.removeChild(existingSprite);
+        existingSprite.destroy();
+      }
+
+      const chunkSprite = new PIXI.Sprite(chunkTexture);
+      chunkSprite.position.set(
         chunkX * CHUNK_SIZE * TILE_SIZE,
         chunkY * CHUNK_SIZE * TILE_SIZE,
       );
 
-      for (let y = 0; y < CHUNK_SIZE; y++) {
-        for (let x = 0; x < CHUNK_SIZE; x++) {
-          const tile = chunk.tiles[y][x];
-          const tileType =
-            tile.type === "land"
-              ? tile.elevation > 0
-                ? "landHigh"
-                : "landLow"
-              : tile.elevation > 0
-                ? "waterShallow"
-                : "waterDeep";
-
-          const texture = this.getRandomTexture(tileType);
-          if (texture) {
-            const sprite = new PIXI.Sprite(texture);
-            sprite.position.set(x * TILE_SIZE, y * TILE_SIZE);
-            container.addChild(sprite);
-          }
-
-          if (tile.resource && tile.resourceAmount) {
-            const resourceTexture = this.getResourceTexture(tile.resource);
-            if (resourceTexture) {
-              const resourceSprite = new PIXI.Sprite(resourceTexture);
-              resourceSprite.position.set(
-                x * TILE_SIZE + TILE_SIZE / 4,
-                y * TILE_SIZE + TILE_SIZE / 4,
-              );
-              resourceSprite.interactive = true;
-              resourceSprite.cursor = "pointer";
-              container.addChild(resourceSprite);
-
-              const tileX = chunkX * CHUNK_SIZE + x;
-              const tileY = chunkY * CHUNK_SIZE + y;
-              this.resourceSprites.set(`${tileX},${tileY}`, resourceSprite);
-            }
-          }
-        }
-      }
-
-      if (this.viewport) {
-        this.viewport.addChild(container);
-      }
-      this.chunkContainers.set(key, container);
+      this.viewport.addChild(chunkSprite);
+      this.chunkContainers.set(key, chunkSprite);
+      console.log(`Added real chunk sprite for ${chunkX},${chunkY}`);
     } catch (error) {
       console.error(`Failed to generate chunk ${chunkX},${chunkY}:`, error);
     } finally {
@@ -245,42 +234,45 @@ export class GameRenderer {
 
   private createPlaceholderTexture(): void {
     const canvas = document.createElement("canvas");
-    canvas.width = TILE_SIZE;
-    canvas.height = TILE_SIZE;
+    canvas.width = CHUNK_SIZE * TILE_SIZE;
+    canvas.height = CHUNK_SIZE * TILE_SIZE;
     const ctx = canvas.getContext("2d")!;
 
     ctx.fillStyle = "#404040";
-    ctx.fillRect(0, 0, TILE_SIZE, TILE_SIZE);
+    ctx.fillRect(0, 0, CHUNK_SIZE * TILE_SIZE, CHUNK_SIZE * TILE_SIZE);
 
     ctx.strokeStyle = "#606060";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(0, 0, CHUNK_SIZE * TILE_SIZE, CHUNK_SIZE * TILE_SIZE);
+
+    // Add grid pattern
+    ctx.strokeStyle = "#505050";
     ctx.lineWidth = 1;
-    ctx.strokeRect(0, 0, TILE_SIZE, TILE_SIZE);
+    for (let i = 0; i <= CHUNK_SIZE; i++) {
+      const pos = i * TILE_SIZE;
+      ctx.beginPath();
+      ctx.moveTo(pos, 0);
+      ctx.lineTo(pos, CHUNK_SIZE * TILE_SIZE);
+      ctx.moveTo(0, pos);
+      ctx.lineTo(CHUNK_SIZE * TILE_SIZE, pos);
+      ctx.stroke();
+    }
 
     this.placeholderTexture = PIXI.Texture.from(canvas);
   }
 
-  private async initializeTextures(): Promise<void> {
+  private generateChunkTexture(chunk: Chunk): PIXI.Texture {
+    console.log('Generating chunk texture, chunk size:', CHUNK_SIZE, 'tile size:', TILE_SIZE);
+    const canvas = document.createElement("canvas");
+    canvas.width = CHUNK_SIZE * TILE_SIZE;
+    canvas.height = CHUNK_SIZE * TILE_SIZE;
+    const ctx = canvas.getContext("2d")!;
+
     const TEXTURE_VARIANTS = {
-      landHigh: [
-        { baseColor: "#8B7355", noiseColor: "#6B5645", noiseOpacity: 0.3 },
-        { baseColor: "#9B8365", noiseColor: "#7B6355", noiseOpacity: 0.35 },
-        { baseColor: "#8B6F47", noiseColor: "#6B5037", noiseOpacity: 0.4 },
-      ],
-      landLow: [
-        { baseColor: "#5A8C3A", noiseColor: "#4A7C2A", noiseOpacity: 0.3 },
-        { baseColor: "#6A9C4A", noiseColor: "#5A8C3A", noiseOpacity: 0.35 },
-        { baseColor: "#4F7C2F", noiseColor: "#3F6C1F", noiseOpacity: 0.4 },
-      ],
-      waterDeep: [
-        { baseColor: "#1E5A8C", noiseColor: "#0E4A7C", noiseOpacity: 0.4 },
-        { baseColor: "#2E6A9C", noiseColor: "#1E5A8C", noiseOpacity: 0.35 },
-        { baseColor: "#0E4A7C", noiseColor: "#003A6C", noiseOpacity: 0.45 },
-      ],
-      waterShallow: [
-        { baseColor: "#3E8AAC", noiseColor: "#2E7A9C", noiseOpacity: 0.3 },
-        { baseColor: "#4E9ABC", noiseColor: "#3E8AAC", noiseOpacity: 0.35 },
-        { baseColor: "#5EAACC", noiseColor: "#4E9ABC", noiseOpacity: 0.25 },
-      ],
+      landHigh: ["#8B7355", "#9B8365", "#8B6F47"],
+      landLow: ["#5A8C3A", "#6A9C4A", "#4F7C2F"],
+      waterDeep: ["#1E5A8C", "#2E6A9C", "#0E4A7C"],
+      waterShallow: ["#3E8AAC", "#4E9ABC", "#5EAACC"],
     };
 
     const RESOURCE_COLORS = {
@@ -291,50 +283,66 @@ export class GameRenderer {
       stone: "#696969",
     };
 
-    try {
-      for (const [type, variants] of Object.entries(TEXTURE_VARIANTS)) {
-        const textures: PIXI.Texture[] = [];
-        for (const variant of variants) {
-          try {
-            const imageBitmap = await this.workerManager.generateTileTexture(variant);
-            const texture = PIXI.Texture.from(imageBitmap);
-            textures.push(texture);
-          } catch (error) {
-            console.warn(`Failed to generate texture for ${type}:`, error);
-            if (this.placeholderTexture) {
-              textures.push(this.placeholderTexture);
-            }
+    for (let y = 0; y < CHUNK_SIZE; y++) {
+      for (let x = 0; x < CHUNK_SIZE; x++) {
+        const tile = chunk.tiles[y][x];
+        const tileType =
+          tile.type === "land"
+            ? tile.elevation > 0
+              ? "landHigh"
+              : "landLow"
+            : tile.elevation > 0
+              ? "waterShallow"
+              : "waterDeep";
+
+        // Pick random color variant for this tile
+        const colors = TEXTURE_VARIANTS[tileType];
+        const baseColor = colors[Math.floor(Math.random() * colors.length)];
+        ctx.fillStyle = baseColor;
+        ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+
+        // Add noise to this tile
+        const imageData = ctx.getImageData(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+        const data = imageData.data;
+        for (let i = 0; i < data.length; i += 4) {
+          if (Math.random() > 0.7) {
+            const noise = Math.random() * 30 - 15;
+            data[i] = Math.max(0, Math.min(255, data[i] + noise));     // R
+            data[i + 1] = Math.max(0, Math.min(255, data[i + 1] + noise)); // G
+            data[i + 2] = Math.max(0, Math.min(255, data[i + 2] + noise)); // B
           }
         }
-        this.textureCache.set(type, textures);
-      }
+        ctx.putImageData(imageData, x * TILE_SIZE, y * TILE_SIZE);
 
-      for (const [resource, color] of Object.entries(RESOURCE_COLORS)) {
-        try {
-          const imageBitmap = await this.workerManager.generateResourceTexture(color);
-          const texture = PIXI.Texture.from(imageBitmap);
-          this.resourceTextureCache.set(resource, texture);
-        } catch (error) {
-          console.warn(`Failed to generate resource texture for ${resource}:`, error);
+        // Draw resources as circles with proper colors
+        if (tile.resource && tile.resourceAmount) {
+          const resourceColor = RESOURCE_COLORS[tile.resource] || "#FFD700";
+          ctx.fillStyle = resourceColor;
+          ctx.beginPath();
+          const centerX = x * TILE_SIZE + TILE_SIZE / 2;
+          const centerY = y * TILE_SIZE + TILE_SIZE / 2;
+          ctx.arc(centerX, centerY, TILE_SIZE / 6, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.strokeStyle = "#000000";
+          ctx.lineWidth = 1;
+          ctx.stroke();
         }
       }
-    } catch (error) {
-      console.error('Failed to initialize textures:', error);
     }
+
+    console.log('Created canvas:', canvas.width, 'x', canvas.height);
+    const texture = PIXI.Texture.from(canvas);
+    console.log('Created PIXI texture:', texture.width, 'x', texture.height);
+    return texture;
   }
 
-  private getRandomTexture(type: string): PIXI.Texture | undefined {
-    const textures = this.textureCache.get(type);
-    if (!textures || textures.length === 0) return this.placeholderTexture || undefined;
-    return textures[Math.floor(Math.random() * textures.length)];
-  }
-
-  private getResourceTexture(resource: string): PIXI.Texture | undefined {
-    return this.resourceTextureCache.get(resource);
+  private async initializeTextures(): Promise<void> {
+    // Textures are now generated per-chunk, so this is simplified
+    console.log('Texture initialization complete - using per-chunk generation');
   }
 
   destroy(): void {
-    this.workerManager.destroy();
     if (this.app) {
       this.app.destroy(true);
     }
