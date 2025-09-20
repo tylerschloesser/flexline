@@ -137,7 +137,7 @@ export const GameUI = memo(function GameUI({ gameState }: GameUIProps) {
           </Group>
         </Stack>
 
-        {craftedItems.furnace && craftedItems.furnace > 0 && (
+        {craftedItems.furnace > 0 && (
           <>
             <Divider my="md" />
             <Text size="md" fw={500} mb="sm">
