@@ -207,7 +207,6 @@ export class GameStateManager {
     };
 
     try {
-      console.log("Saving state:", essentialState);
       localStorage.setItem("gameState", JSON.stringify(essentialState));
     } catch (e) {
       console.error("Failed to save state:", e);
