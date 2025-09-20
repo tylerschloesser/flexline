@@ -3,7 +3,12 @@ import { Viewport } from "pixi-viewport";
 import { GameStateManager } from "./gameState";
 import { WorkerManager } from "../workers/WorkerManager";
 import { InputManager } from "./inputManager";
-import { TILE_SIZE, CHUNK_SIZE, ZOOM_CONFIG } from "./schemas";
+import {
+  TILE_SIZE,
+  CHUNK_SIZE,
+  ZOOM_CONFIG,
+  ENTITY_DEFINITIONS,
+} from "./schemas";
 import {
   CAMERA_MOVE_SPEED,
   MIN_FRAME_TIME,
@@ -223,24 +228,42 @@ export class GameRenderer {
   }
 
   private handleClick(worldPixelX: number, worldPixelY: number): void {
-    // Convert world pixel coordinates to tile coordinates (1x1 units)
-    const tileX = Math.floor(worldPixelX / TILE_SIZE);
-    const tileY = Math.floor(worldPixelY / TILE_SIZE);
-
     const selectedItem = this.gameState.getSelectedCraftingItem();
 
     if (selectedItem) {
+      // Get entity definition to calculate proper center
+      const definition = ENTITY_DEFINITIONS[selectedItem];
+      const { width, height } = definition;
+
+      // Convert click position (world pixels) to tile coordinates, treating click as entity center
+      const clickTileX = worldPixelX / TILE_SIZE;
+      const clickTileY = worldPixelY / TILE_SIZE;
+
+      // For even-sized entities, round to nearest integer (grid intersections)
+      // For odd-sized entities, round to nearest half-integer (tile centers)
+      const centerX =
+        width % 2 === 0
+          ? Math.round(clickTileX)
+          : Math.round(clickTileX - 0.5) + 0.5;
+      const centerY =
+        height % 2 === 0
+          ? Math.round(clickTileY)
+          : Math.round(clickTileY - 0.5) + 0.5;
+
       // Try to place entity
       const success = this.gameState.placeEntity(
         selectedItem,
-        tileX + 0.5,
-        tileY + 0.5,
+        centerX,
+        centerY,
       );
       if (success) {
         this.renderEntities();
       }
     } else {
       // Mine resource (resources are infinite, no chunk regeneration needed)
+      // Convert world pixel coordinates to tile coordinates for mining
+      const tileX = Math.floor(worldPixelX / TILE_SIZE);
+      const tileY = Math.floor(worldPixelY / TILE_SIZE);
       this.gameState.mineResource(tileX, tileY);
     }
   }
@@ -476,11 +499,24 @@ export class GameRenderer {
     const selectedItem = this.gameState.getSelectedCraftingItem();
     if (!selectedItem) return;
 
-    // Convert mouse position (world pixels) to tile coordinates
-    const tileX = Math.floor(this.mousePosition.x / TILE_SIZE);
-    const tileY = Math.floor(this.mousePosition.y / TILE_SIZE);
-    const centerX = tileX + 0.5;
-    const centerY = tileY + 0.5;
+    // Get entity definition to calculate proper center
+    const definition = ENTITY_DEFINITIONS[selectedItem];
+    const { width, height } = definition;
+
+    // Convert mouse position (world pixels) to tile coordinates, treating mouse as entity center
+    const mouseTileX = this.mousePosition.x / TILE_SIZE;
+    const mouseTileY = this.mousePosition.y / TILE_SIZE;
+
+    // For even-sized entities, round to nearest integer (grid intersections)
+    // For odd-sized entities, round to nearest half-integer (tile centers)
+    const centerX =
+      width % 2 === 0
+        ? Math.round(mouseTileX)
+        : Math.round(mouseTileX - 0.5) + 0.5;
+    const centerY =
+      height % 2 === 0
+        ? Math.round(mouseTileY)
+        : Math.round(mouseTileY - 0.5) + 0.5;
 
     // Check if placement is valid
     const canPlace = this.gameState.canPlaceEntity(
