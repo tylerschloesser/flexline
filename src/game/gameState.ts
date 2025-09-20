@@ -1,5 +1,4 @@
 import type { GameState, Chunk, Inventory, ResourceType } from "./schemas";
-import { GameStateSchema } from "./schemas";
 import { WorldGenerator } from "./worldGenerator";
 
 export class GameStateManager {
@@ -146,14 +145,26 @@ export class GameStateManager {
   }
 
   private saveState(): void {
+    // Only save essential state, not chunk data (chunks will be regenerated)
+    const essentialState = {
+      inventory: this.state.inventory,
+      craftedItems: this.state.craftedItems,
+      cameraX: this.state.cameraX,
+      cameraY: this.state.cameraY,
+      cameraZoom: this.state.cameraZoom,
+    };
+
     try {
-      const serializable = {
-        ...this.state,
-        chunks: Array.from(this.state.chunks.entries()),
-      };
-      localStorage.setItem("gameState", JSON.stringify(serializable));
+      localStorage.setItem("gameState", JSON.stringify(essentialState));
     } catch (e) {
       console.error("Failed to save state:", e);
+      // If saving fails, try to clear old data and save again
+      try {
+        localStorage.removeItem("gameState");
+        localStorage.setItem("gameState", JSON.stringify(essentialState));
+      } catch (e2) {
+        console.error("Failed to save state even after clearing:", e2);
+      }
     }
   }
 
@@ -163,12 +174,24 @@ export class GameStateManager {
       if (!saved) return null;
 
       const parsed = JSON.parse(saved);
+
+      // Merge saved essential state with default state structure
       const state = {
-        ...parsed,
-        chunks: new Map(parsed.chunks),
+        chunks: new Map(), // Start with empty chunks (will be generated on demand)
+        inventory: parsed.inventory || {
+          iron: 0,
+          copper: 0,
+          coal: 0,
+          wood: 0,
+          stone: 0,
+        },
+        craftedItems: parsed.craftedItems || {},
+        cameraX: parsed.cameraX || 0,
+        cameraY: parsed.cameraY || 0,
+        cameraZoom: parsed.cameraZoom || 1,
       };
 
-      return GameStateSchema.parse(state);
+      return state;
     } catch (e) {
       console.error("Failed to load state:", e);
       return null;

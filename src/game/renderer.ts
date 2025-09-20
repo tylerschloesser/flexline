@@ -67,6 +67,7 @@ export class GameRenderer {
       this.viewport.resize(window.innerWidth, window.innerHeight);
     });
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     this.viewport.on("clicked", (event: any) => {
       if (!this.viewport) return;
       const worldPoint = this.viewport.toWorld(event.data.global);
